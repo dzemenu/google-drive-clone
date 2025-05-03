@@ -1,5 +1,5 @@
 import "dotenv/config"; // Ensure .env is loaded outside Next.js
-import { drizzle } from "drizzle-orm/node-postgres";
+import { drizzle, NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import * as schema from "./schema";
 
@@ -15,7 +15,7 @@ if (!adminDbUrl || !dbName) {
 console.log("🔌 Admin DB URL:", adminDbUrl);
 console.log("📁 Admin DB Name:", dbName);
 
-let db;
+let db: NodePgDatabase<typeof schema> & { $client: Pool; };
 
 async function ensureDatabaseExists() {
   const adminPool = new Pool({ connectionString: adminDbUrl });
