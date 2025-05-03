@@ -18,7 +18,9 @@ console.log("📁 Admin DB Name:", dbName);
 let db: NodePgDatabase<typeof schema> & { $client: Pool; };
 
 async function ensureDatabaseExists() {
-  const adminPool = new Pool({ connectionString: adminDbUrl });
+  const adminPool = new Pool({ connectionString: adminDbUrl , ssl: {
+    rejectUnauthorized: false, // <== Required for Supabase's self-signed SSL cert
+  },});
 
   try {
     const client = await adminPool.connect();
