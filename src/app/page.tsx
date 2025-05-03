@@ -18,9 +18,9 @@ export default function LandingPage() {
       <div className="w-1/2 flex flex-col justify-center items-center p-8 bg-white dark:bg-gray-900">
         <div className="w-full max-w-md">
           {mode === "sign-in" ? (
-            <SignIn routing="hash" />
+            <SignIn routing="hash" afterSignInUrl="/dashboard" />
           ) : (
-            <SignUp routing="hash" />
+            <SignUp routing="hash" afterSignUpUrl="/dashboard" />
           )}
         </div>
       </div>
