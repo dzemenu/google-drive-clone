@@ -18,6 +18,7 @@ export async function GET() {
       .where(eq(folders.userId, userId));
 
     return NextResponse.json(userFolders);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   } catch (error) {
     return NextResponse.json(
       { error: "Failed to fetch folders" },
@@ -52,6 +53,7 @@ export async function POST(req: Request) {
 
     // Return the created folder with a 201 status code
     return NextResponse.json(newFolder[0], { status: 201 });
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   } catch (error) {
     return NextResponse.json(
       { error: "Failed to create folder" },

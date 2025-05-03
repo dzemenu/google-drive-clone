@@ -1,15 +1,16 @@
 "use client";
 
-import { Folder, File, Trash, LogOut, Plus, Sun, Moon } from "lucide-react";
+import { Folder, Trash, LogOut, Plus, Sun, Moon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { UserButton, useUser, useClerk } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
 
 export default function Dashboard() {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [folders, setFolders] = useState<any[]>([]);
   const [newFolderName, setNewFolderName] = useState("");
   const [darkMode, setDarkMode] = useState(false);
-  const { user, isLoaded } = useUser();
+  const { user } = useUser();
   const { signOut } = useClerk();
 
   useEffect(() => {
