@@ -2,7 +2,9 @@ import "dotenv/config"; // Ensure .env is loaded outside Next.js
 import { drizzle, NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import * as schema from "./schema";
-
+import path from "path";
+import fs from "fs";
+const certFile=path.resolve('src/lib/cert.crt');
 const adminDbUrl = process.env.POSTGRES_URL;
 const dbName = process.env.POSTGRES_DB;
 
@@ -19,7 +21,8 @@ let db: NodePgDatabase<typeof schema> & { $client: Pool; };
 
 async function ensureDatabaseExists() {
   const adminPool = new Pool({ connectionString: adminDbUrl , ssl: {
-    rejectUnauthorized: false, // <== Required for Supabase's self-signed SSL cert
+    rejectUnauthorized: true, // Keep security enabled
+      ca: fs.readFileSync(certFile).toString(),
   },});
 
   try {
