@@ -1,67 +1,47 @@
-import "dotenv/config"; // Ensure .env is loaded outside Next.js
-import { drizzle, NodePgDatabase } from "drizzle-orm/node-postgres";
+import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
+import * as dotenv from "dotenv";
 import * as schema from "./schema";
-import path from "path";
-import fs from "fs";
-const certFile=path.resolve('src/lib/cert.crt');
-const adminDbUrl = process.env.POSTGRES_URL;
-const dbName = process.env.POSTGRES_DB;
 
-if (!adminDbUrl || !dbName) {
-  throw new Error(
-    "Missing POSTGRES_URL or POSTGRES_DB in environment variables"
-  );
+dotenv.config();
+
+if (!process.env.POSTGRES_URL) {
+  throw new Error("POSTGRES_URL is not defined");
 }
 
-console.log("🔌 Admin DB URL:", adminDbUrl);
-console.log("📁 Admin DB Name:", dbName);
+// Create a pool for application operations
+const pool = new Pool({
+  connectionString: process.env.POSTGRES_URL,
+  ssl: {
+    rejectUnauthorized: false
+  }
+});
 
-let db: NodePgDatabase<typeof schema> & { $client: Pool; };
+// Initialize drizzle with the pool
+const db = drizzle(pool, { schema });
 
-async function ensureDatabaseExists() {
-  const adminPool = new Pool({ connectionString: adminDbUrl , ssl: {
-    rejectUnauthorized: true, // Keep security enabled
-      ca: fs.readFileSync(certFile).toString(),
-  },});
-
+// Function to connect to the database
+async function connectToDatabase() {
   try {
-    const client = await adminPool.connect();
-    const res = await client.query(
-      `SELECT 1 FROM pg_database WHERE datname = $1`,
-      [dbName]
-    );
-
-    if (res.rowCount === 0) {
-      console.log(`🛠️ Creating database "${dbName}"...`);
-      await client.query(`CREATE DATABASE "${dbName}"`);
-      console.log(`✅ Database "${dbName}" created.`);
-    } else {
-      console.log(`✅ Database "${dbName}" already exists.`);
-    }
-
+    const client = await pool.connect();
+    console.log("✅ Connected to database via Drizzle");
     client.release();
   } catch (err) {
-    console.error("❌ Error checking/creating database:", err);
+    console.error("❌ Failed to connect to database:", err);
     throw err;
-  } finally {
-    await adminPool.end();
   }
 }
 
-async function connectToDatabase() {
-  await ensureDatabaseExists();
+// Initialize the database connection
+let dbInitialized = false;
 
-  const appDbUrl = adminDbUrl?.replace(/\/[^/]+$/, `/${dbName}`);
-  const appPool = new Pool({ connectionString: appDbUrl });
-
-  db = drizzle(appPool, { schema });
-  console.log("✅ Connected to application database via Drizzle.");
+export async function getDb() {
+  if (!dbInitialized) {
+    await connectToDatabase();
+    dbInitialized = true;
+  }
+  return db;
 }
 
-connectToDatabase().catch((err) => {
-  console.error("❌ Failed to initialize DB:", err);
-  process.exit(1);
-});
-
+// Export the drizzle instance
 export { db };

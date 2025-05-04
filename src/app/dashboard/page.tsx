@@ -5,11 +5,18 @@ import { useEffect, useState } from "react";
 import { UserButton, useUser, useClerk } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
 
+interface Folder {
+  id: number;
+  name: string;
+  userId: string;
+  createdAt: string;
+}
+
 export default function Dashboard() {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [folders, setFolders] = useState<any[]>([]);
+  const [folders, setFolders] = useState<Folder[]>([]);
   const [newFolderName, setNewFolderName] = useState("");
   const [darkMode, setDarkMode] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const { user } = useUser();
   const { signOut } = useClerk();
 
@@ -18,9 +25,26 @@ export default function Dashboard() {
   }, [darkMode]);
 
   const fetchFolders = async () => {
-    const res = await fetch("/api/folders");
-    const data = await res.json();
-    setFolders(data);
+    try {
+      setIsLoading(true);
+      const res = await fetch("/api/folders");
+      if (!res.ok) {
+        throw new Error("Failed to fetch folders");
+      }
+      const data = await res.json();
+      // Ensure data is an array
+      if (Array.isArray(data)) {
+        setFolders(data);
+      } else {
+        console.error("Invalid folders data format:", data);
+        setFolders([]);
+      }
+    } catch (error) {
+      console.error("Error fetching folders:", error);
+      setFolders([]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -29,12 +53,26 @@ export default function Dashboard() {
 
   const handleAddFolder = async () => {
     if (!newFolderName.trim()) return;
-    await fetch("/api/folders", {
-      method: "POST",
-      body: JSON.stringify({ name: newFolderName }),
-    });
-    setNewFolderName("");
-    fetchFolders();
+    try {
+      const response = await fetch("/api/folders", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name: newFolderName }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        console.error("Failed to create folder:", error);
+        return;
+      }
+
+      setNewFolderName("");
+      await fetchFolders();
+    } catch (error) {
+      console.error("Error creating folder:", error);
+    }
   };
 
   return (
@@ -63,11 +101,6 @@ export default function Dashboard() {
         />
 
         <nav className="space-y-2 pt-4">
-          {folders.map((folder) => (
-            <div key={folder.id} className="flex items-center gap-2">
-              <Folder size={18} /> {folder.name}
-            </div>
-          ))}
           <div
             className="flex items-center gap-2 hover:text-red-500 cursor-pointer"
             onClick={() => signOut()}
@@ -90,8 +123,14 @@ export default function Dashboard() {
         </div>
 
         <div className="rounded-lg shadow-sm bg-white dark:bg-gray-800 p-4">
-          {folders.length === 0 ? (
-            <p>No folders yet.</p>
+          {isLoading ? (
+            <p className="text-gray-500 dark:text-gray-400">Loading folders...</p>
+          ) : folders.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8">
+              <Folder size={48} className="text-gray-400 mb-4" />
+              <p className="text-gray-500 dark:text-gray-400">No folders yet</p>
+              <p className="text-sm text-gray-400 mt-2">Create your first folder to get started</p>
+            </div>
           ) : (
             <ul className="space-y-2">
               {folders.map((folder) => (
