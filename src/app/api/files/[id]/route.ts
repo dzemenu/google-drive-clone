@@ -6,11 +6,11 @@ import { getDb } from "@/lib/db";
 
 export async function DELETE(
   _: Request,
-  context: { params: { id: string } }
+  { params }: { params: { id: string } }
 ) {
   try {
     const { userId } = await auth();
-    const { id } = context.params;
+    const { id } = params;
 
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -41,11 +41,11 @@ export async function DELETE(
 
 export async function PATCH(
   req: Request,
-  context: { params: { id: string } }
+  { params }: { params: { id: string } }
 ) {
   try {
     const { userId } = await auth();
-    const { id } = context.params;
+    const { id } = params;
 
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
