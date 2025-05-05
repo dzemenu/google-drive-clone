@@ -1,11 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { files } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 
 export async function DELETE(
-  _: Request,
+  _: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
@@ -40,7 +40,7 @@ export async function DELETE(
 }
 
 export async function PATCH(
-  req: Request,
+  req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
