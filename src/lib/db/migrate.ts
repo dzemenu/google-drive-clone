@@ -28,8 +28,21 @@ const runMigrate = async () => {
     await client.query('CREATE SCHEMA IF NOT EXISTS "public";');
     console.log('Ensured schema "public" exists');
 
+    // Get the latest migration file
+    const migrationsDir = path.join(process.cwd(), 'drizzle', 'migrations');
+    const migrationFiles = fs.readdirSync(migrationsDir)
+      .filter(file => file.endsWith('.sql'))
+      .sort();
+    
+    if (migrationFiles.length === 0) {
+      throw new Error('No migration files found');
+    }
+
+    const latestMigration = migrationFiles[migrationFiles.length - 1];
+    const migrationPath = path.join(migrationsDir, latestMigration);
+    console.log(`Using migration file: ${latestMigration}`);
+
     // Read and execute the migration SQL directly
-    const migrationPath = path.join(process.cwd(), 'drizzle', 'migrations', '0000_true_doorman.sql');
     const migrationSQL = fs.readFileSync(migrationPath, 'utf8');
     
     // Split on statement-breakpoint and execute each statement

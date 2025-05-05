@@ -1,25 +1,31 @@
 // app/api/files/route.ts
-import { db } from "@/lib/db";
-import { folders } from "@/lib/db/schema";
+import { getDb } from "@/lib/db";
+import { files } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { auth } from "@clerk/nextjs/server";
 
 export async function GET() {
-  const { userId } = await auth();
+  try {
+    const { userId } = await auth();
 
-  if (!userId) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-    });
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+      });
+    }
+
+    const db = await getDb();
+    const userFiles = await db
+      .select()
+      .from(files)
+      .where(eq(files.userId, userId));
+
+    return new Response(JSON.stringify(userFiles));
+  } catch (error) {
+    console.error("Error fetching files:", error);
+    return new Response(
+      JSON.stringify({ error: "Failed to fetch files" }),
+      { status: 500 }
+    );
   }
-
-  // Fetch folders with files for current user
-  const userFolders = await db.query.folders.findMany({
-    where: eq(folders.userId, userId),
-    with: {
-      files: true,
-    },
-  });
-
-  return new Response(JSON.stringify(userFolders));
 }

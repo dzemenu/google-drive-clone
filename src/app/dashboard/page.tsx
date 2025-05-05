@@ -1,9 +1,14 @@
 "use client";
 
-import { Folder, Trash, LogOut, Plus, Sun, Moon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Folder, Trash, LogOut, Plus, Sun, Moon, Upload, File, ChevronDown, ChevronRight } from "lucide-react";
+import { useEffect, useState, useRef } from "react";
 import { UserButton, useUser, useClerk } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
+import { uploadFile, formatBytes } from "@/lib/utils";
+import { Modal } from "@/components/ui/modal";
+import { UploadModal } from "@/components/upload-modal";
+import { ConfirmModal } from "@/components/confirm-modal";
+import { toast } from "react-hot-toast";
 
 interface Folder {
   id: number;
@@ -12,13 +17,32 @@ interface Folder {
   createdAt: string;
 }
 
+interface FileItem {
+  id: number;
+  name: string;
+  url: string;
+  size: string;
+  folderId: number | null;
+  userId: string;
+  createdAt: string;
+}
+
 export default function Dashboard() {
   const [folders, setFolders] = useState<Folder[]>([]);
+  const [files, setFiles] = useState<FileItem[]>([]);
   const [newFolderName, setNewFolderName] = useState("");
   const [darkMode, setDarkMode] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedFolder, setSelectedFolder] = useState<number | null>(null);
+  const [isAddFolderModalOpen, setIsAddFolderModalOpen] = useState(false);
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [expandedFolders, setExpandedFolders] = useState<Set<number>>(new Set());
   const { user } = useUser();
   const { signOut } = useClerk();
+  const [isDeleteFileModalOpen, setIsDeleteFileModalOpen] = useState(false);
+  const [isDeleteFolderModalOpen, setIsDeleteFolderModalOpen] = useState(false);
+  const [fileToDelete, setFileToDelete] = useState<FileItem | null>(null);
+  const [folderToDelete, setFolderToDelete] = useState<Folder | null>(null);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", darkMode);
@@ -47,8 +71,28 @@ export default function Dashboard() {
     }
   };
 
+  const fetchFiles = async () => {
+    try {
+      const res = await fetch("/api/files");
+      if (!res.ok) {
+        throw new Error("Failed to fetch files");
+      }
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setFiles(data);
+      } else {
+        console.error("Invalid files data format:", data);
+        setFiles([]);
+      }
+    } catch (error) {
+      console.error("Error fetching files:", error);
+      setFiles([]);
+    }
+  };
+
   useEffect(() => {
     fetchFolders();
+    fetchFiles();
   }, []);
 
   const handleAddFolder = async () => {
@@ -69,9 +113,70 @@ export default function Dashboard() {
       }
 
       setNewFolderName("");
+      setIsAddFolderModalOpen(false);
       await fetchFolders();
     } catch (error) {
       console.error("Error creating folder:", error);
+    }
+  };
+
+  const handleFileUpload = async (file: globalThis.File, folderId?: number) => {
+    try {
+      await uploadFile(file, folderId);
+      await fetchFiles();
+    } catch (error) {
+      console.error("Error uploading file:", error);
+    }
+  };
+
+  const toggleFolder = (folderId: number) => {
+    setExpandedFolders(prev => {
+      const next = new Set(prev);
+      if (next.has(folderId)) {
+        next.delete(folderId);
+      } else {
+        next.add(folderId);
+      }
+      return next;
+    });
+  };
+
+  const getFolderFiles = (folderId: number | null) => {
+    return files.filter(file => file.folderId === folderId);
+  };
+
+  const handleDeleteFile = async (file: FileItem) => {
+    try {
+      const response = await fetch(`/api/files/${file.id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to delete file");
+      }
+
+      setFiles((prev) => prev.filter((f) => f.id !== file.id));
+    } catch (error) {
+      console.error("Error deleting file:", error);
+      toast.error("Failed to delete file");
+    }
+  };
+
+  const handleDeleteFolder = async (folder: Folder) => {
+    try {
+      const response = await fetch(`/api/folders/${folder.id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to delete folder");
+      }
+
+      setFolders((prev) => prev.filter((f) => f.id !== folder.id));
+      setFiles((prev) => prev.filter((f) => f.folderId !== folder.id));
+    } catch (error) {
+      console.error("Error deleting folder:", error);
+      toast.error("Failed to delete folder");
     }
   };
 
@@ -80,7 +185,7 @@ export default function Dashboard() {
       {/* Sidebar */}
       <aside className="w-64 bg-white dark:bg-gray-800 shadow-md p-4 space-y-4">
         <div className="flex justify-between items-center">
-          <Button onClick={handleAddFolder} className="flex gap-2 w-44">
+          <Button onClick={() => setIsAddFolderModalOpen(true)} className="flex gap-2 w-44">
             <Plus size={18} /> Add Folder
           </Button>
           <Button
@@ -92,13 +197,14 @@ export default function Dashboard() {
           </Button>
         </div>
 
-        <input
-          type="text"
-          value={newFolderName}
-          onChange={(e) => setNewFolderName(e.target.value)}
-          placeholder="Folder name"
-          className="mt-2 w-full rounded border p-2 text-sm bg-gray-50 dark:bg-gray-700"
-        />
+        <div className="pt-4">
+          <Button
+            onClick={() => setIsUploadModalOpen(true)}
+            className="flex gap-2 w-full justify-center items-center"
+          >
+            <Upload size={18} /> Upload File
+          </Button>
+        </div>
 
         <nav className="space-y-2 pt-4">
           <div
@@ -124,32 +230,207 @@ export default function Dashboard() {
 
         <div className="rounded-lg shadow-sm bg-white dark:bg-gray-800 p-4">
           {isLoading ? (
-            <p className="text-gray-500 dark:text-gray-400">Loading folders...</p>
-          ) : folders.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-8">
-              <Folder size={48} className="text-gray-400 mb-4" />
-              <p className="text-gray-500 dark:text-gray-400">No folders yet</p>
-              <p className="text-sm text-gray-400 mt-2">Create your first folder to get started</p>
-            </div>
+            <p className="text-gray-500 dark:text-gray-400">Loading...</p>
           ) : (
-            <ul className="space-y-2">
-              {folders.map((folder) => (
-                <li
-                  key={folder.id}
-                  className="flex justify-between items-center"
-                >
-                  <span className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
-                    <Folder size={20} /> {folder.name}
-                  </span>
-                  <Button variant="ghost" size="icon">
-                    <Trash className="text-red-500" size={18} />
-                  </Button>
-                </li>
-              ))}
-            </ul>
+            <div className="space-y-4">
+              {/* Root Files */}
+              <div>
+                <h2 className="text-lg font-semibold mb-2">Root Directory</h2>
+                {getFolderFiles(null).length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8">
+                    <File size={48} className="text-gray-400 mb-4" />
+                    <p className="text-gray-500 dark:text-gray-400">No files in root</p>
+                  </div>
+                ) : (
+                  <ul className="space-y-2">
+                    {getFolderFiles(null).map((file) => (
+                      <li
+                        key={file.id}
+                        className="flex justify-between items-center p-2 rounded hover:bg-gray-50 dark:hover:bg-gray-700"
+                      >
+                        <a
+                          href={file.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 text-blue-600 dark:text-blue-400"
+                        >
+                          <File size={20} /> {file.name}
+                        </a>
+                        <div className="flex items-center gap-4">
+                          <span className="text-sm text-gray-500">{formatBytes(parseInt(file.size))}</span>
+                          <Button variant="ghost" size="icon" onClick={(e) => {
+                            e.stopPropagation();
+                            setFileToDelete(file);
+                            setIsDeleteFileModalOpen(true);
+                          }}>
+                            <Trash className="text-red-500" size={18} />
+                          </Button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              {/* Folders with their files */}
+              <div>
+                <h2 className="text-lg font-semibold mb-2">Folders</h2>
+                {folders.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8">
+                    <Folder size={48} className="text-gray-400 mb-4" />
+                    <p className="text-gray-500 dark:text-gray-400">No folders yet</p>
+                    <p className="text-sm text-gray-400 mt-2">Create your first folder to get started</p>
+                  </div>
+                ) : (
+                  <ul className="space-y-2">
+                    {folders.map((folder) => {
+                      const folderFiles = getFolderFiles(folder.id);
+                      const isExpanded = expandedFolders.has(folder.id);
+                      
+                      return (
+                        <li key={folder.id} className="space-y-1">
+                          <div
+                            className={`flex justify-between items-center p-2 rounded cursor-pointer ${
+                              selectedFolder === folder.id ? 'bg-blue-50 dark:bg-blue-900' : 'hover:bg-gray-50 dark:hover:bg-gray-700'
+                            }`}
+                            onClick={() => {
+                              setSelectedFolder(folder.id);
+                              toggleFolder(folder.id);
+                            }}
+                          >
+                            <span className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                              {isExpanded ? (
+                                <ChevronDown size={20} className="text-gray-500" />
+                              ) : (
+                                <ChevronRight size={20} className="text-gray-500" />
+                              )}
+                              <Folder size={20} /> {folder.name}
+                            </span>
+                            <Button variant="ghost" size="icon" onClick={(e) => {
+                              e.stopPropagation();
+                              setFolderToDelete(folder);
+                              setIsDeleteFolderModalOpen(true);
+                            }}>
+                              <Trash className="text-red-500" size={18} />
+                            </Button>
+                          </div>
+                          
+                          {/* Folder Files */}
+                          {isExpanded && (
+                            <div className="ml-8 space-y-2">
+                              {folderFiles.length === 0 ? (
+                                <p className="text-sm text-gray-500 dark:text-gray-400 py-2">
+                                  No files in this folder
+                                </p>
+                              ) : (
+                                folderFiles.map((file) => (
+                                  <div
+                                    key={file.id}
+                                    className="flex justify-between items-center p-2 rounded hover:bg-gray-50 dark:hover:bg-gray-700"
+                                  >
+                                    <a
+                                      href={file.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-center gap-2 text-blue-600 dark:text-blue-400"
+                                    >
+                                      <File size={20} /> {file.name}
+                                    </a>
+                                    <div className="flex items-center gap-4">
+                                      <span className="text-sm text-gray-500">
+                                        {formatBytes(parseInt(file.size))}
+                                      </span>
+                                      <Button variant="ghost" size="icon" onClick={(e) => {
+                                        e.stopPropagation();
+                                        setFileToDelete(file);
+                                        setIsDeleteFileModalOpen(true);
+                                      }}>
+                                        <Trash className="text-red-500" size={18} />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            </div>
           )}
         </div>
       </main>
+
+      {/* Add Folder Modal */}
+      <Modal
+        isOpen={isAddFolderModalOpen}
+        onClose={() => setIsAddFolderModalOpen(false)}
+        title="Create New Folder"
+      >
+        <div className="mt-2">
+          <input
+            type="text"
+            value={newFolderName}
+            onChange={(e) => setNewFolderName(e.target.value)}
+            placeholder="Enter folder name"
+            className="w-full rounded border p-2 text-sm bg-gray-50 dark:bg-gray-700"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                handleAddFolder();
+              }
+            }}
+          />
+        </div>
+
+        <div className="mt-4 flex justify-end gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setIsAddFolderModalOpen(false)}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleAddFolder}
+            disabled={!newFolderName.trim()}
+          >
+            Create Folder
+          </Button>
+        </div>
+      </Modal>
+
+      {/* Upload Modal */}
+      <UploadModal
+        isOpen={isUploadModalOpen}
+        onClose={() => setIsUploadModalOpen(false)}
+        folders={folders}
+        onUpload={handleFileUpload}
+      />
+
+      {/* Add confirmation modals */}
+      <ConfirmModal
+        isOpen={isDeleteFileModalOpen}
+        onClose={() => {
+          setIsDeleteFileModalOpen(false);
+          setFileToDelete(null);
+        }}
+        onConfirm={() => fileToDelete && handleDeleteFile(fileToDelete)}
+        title="Delete File"
+        description="Are you sure you want to delete this file? This action cannot be undone."
+      />
+
+      <ConfirmModal
+        isOpen={isDeleteFolderModalOpen}
+        onClose={() => {
+          setIsDeleteFolderModalOpen(false);
+          setFolderToDelete(null);
+        }}
+        onConfirm={() => folderToDelete && handleDeleteFolder(folderToDelete)}
+        title="Delete Folder"
+        description="Are you sure you want to delete this folder and all its contents? This action cannot be undone."
+      />
     </div>
   );
 }

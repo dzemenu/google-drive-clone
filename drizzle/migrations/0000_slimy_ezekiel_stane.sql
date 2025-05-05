@@ -4,14 +4,14 @@ CREATE TABLE "files" (
 	"url" text NOT NULL,
 	"size" varchar(50),
 	"folder_id" integer,
-	"user_id" uuid NOT NULL,
+	"user_id" text NOT NULL,
 	"created_at" timestamp DEFAULT now()
 );
 --> statement-breakpoint
 CREATE TABLE "folders" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"name" varchar(255),
-	"user_id" uuid NOT NULL,
+	"user_id" text NOT NULL,
 	"created_at" timestamp DEFAULT now()
 );
 --> statement-breakpoint
