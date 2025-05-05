@@ -1,95 +1,135 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
-import { Folder, Upload } from "lucide-react";
+import { Upload, AlertCircle } from "lucide-react";
+import { validateFile, formatBytes, MAX_FILE_SIZE } from "@/lib/utils";
 
 interface Folder {
   id: number;
   name: string;
-  userId: string;
-  createdAt: string;
 }
 
 interface UploadModalProps {
   isOpen: boolean;
   onClose: () => void;
   folders: Folder[];
-  onUpload: (file: globalThis.File, folderId?: number) => Promise<void>;
+  onUpload: (file: File, folderId?: number) => Promise<void>;
 }
 
 export function UploadModal({ isOpen, onClose, folders, onUpload }: UploadModalProps) {
   const [selectedFolder, setSelectedFolder] = useState<number | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (!files || files.length === 0) return;
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setError(null);
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-    try {
-      await onUpload(files[0], selectedFolder || undefined);
-      onClose();
-      event.target.value = ''; // Reset file input
-    } catch (error) {
-      console.error("Error uploading file:", error);
+    const validation = validateFile(file);
+    if (!validation.isValid) {
+      setError(validation.error || 'Invalid file');
+      setSelectedFile(null);
+      return;
     }
+
+    setSelectedFile(file);
   };
 
-  const handleUploadClick = () => {
-    fileInputRef.current?.click();
+  const handleUpload = async () => {
+    if (!selectedFile) return;
+
+    try {
+      setIsUploading(true);
+      setError(null);
+      await onUpload(selectedFile, selectedFolder || undefined);
+      onClose();
+    } catch (error) {
+      setError('Failed to upload file. Please try again.');
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Upload File">
-      <div className="mt-2 space-y-4">
+      <div className="space-y-4">
+        {/* Folder Selection */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Select Folder (Optional)
-          </label>
-          <div className="max-h-48 overflow-y-auto space-y-1">
-            <div
-              className={`flex items-center gap-2 p-2 rounded cursor-pointer ${
-                selectedFolder === null ? 'bg-blue-50 dark:bg-blue-900' : 'hover:bg-gray-50 dark:hover:bg-gray-700'
-              }`}
-              onClick={() => setSelectedFolder(null)}
-            >
-              <Folder size={20} className="text-gray-500" />
-              <span className="text-sm">Root Directory</span>
-            </div>
+          <label className="block text-sm font-medium mb-2">Select Folder</label>
+          <select
+            value={selectedFolder || ""}
+            onChange={(e) => setSelectedFolder(e.target.value ? Number(e.target.value) : null)}
+            className="w-full rounded border p-2 text-sm bg-gray-50 dark:bg-gray-700"
+          >
+            <option value="">Root Directory</option>
             {folders.map((folder) => (
-              <div
-                key={folder.id}
-                className={`flex items-center gap-2 p-2 rounded cursor-pointer ${
-                  selectedFolder === folder.id ? 'bg-blue-50 dark:bg-blue-900' : 'hover:bg-gray-50 dark:hover:bg-gray-700'
-                }`}
-                onClick={() => setSelectedFolder(folder.id)}
-              >
-                <Folder size={20} className="text-blue-500" />
-                <span className="text-sm">{folder.name}</span>
-              </div>
+              <option key={folder.id} value={folder.id}>
+                {folder.name}
+              </option>
             ))}
+          </select>
+        </div>
+
+        {/* File Selection */}
+        <div>
+          <label className="block text-sm font-medium mb-2">Select File</label>
+          <div className="flex items-center gap-2">
+            <input
+              type="file"
+              onChange={handleFileSelect}
+              className="hidden"
+              id="file-upload"
+            />
+            <label
+              htmlFor="file-upload"
+              className="flex-1 cursor-pointer"
+            >
+              <div className="border-2 border-dashed rounded-lg p-4 text-center hover:bg-gray-50 dark:hover:bg-gray-700">
+                {selectedFile ? (
+                  <div className="space-y-1">
+                    <p className="font-medium">{selectedFile.name}</p>
+                    <p className="text-sm text-gray-500">
+                      {formatBytes(selectedFile.size)}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    <Upload className="mx-auto h-8 w-8 text-gray-400" />
+                    <p className="text-sm text-gray-500">
+                      Click to select a file
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      Max size: {formatBytes(MAX_FILE_SIZE)}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </label>
           </div>
         </div>
 
-        <div className="pt-4">
-          <Button
-            onClick={handleUploadClick}
-            className="flex gap-2 w-full justify-center items-center"
-          >
-            <Upload size={18} /> Select File
-          </Button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            onChange={handleFileSelect}
-            className="hidden"
-          />
-        </div>
-      </div>
+        {/* Error Message */}
+        {error && (
+          <div className="flex items-center gap-2 text-red-500 text-sm">
+            <AlertCircle size={16} />
+            <span>{error}</span>
+          </div>
+        )}
 
-      <div className="mt-4 flex justify-end gap-2">
-        <Button variant="outline" onClick={onClose}>
-          Cancel
-        </Button>
+        {/* Upload Button */}
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleUpload}
+            disabled={!selectedFile || isUploading}
+          >
+            {isUploading ? "Uploading..." : "Upload"}
+          </Button>
+        </div>
       </div>
     </Modal>
   );

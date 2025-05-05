@@ -42,3 +42,36 @@ export async function uploadFile(file: File, folderId?: number) {
     throw error;
   }
 }
+
+// File size limits
+export const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+export const ALLOWED_FILE_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'application/pdf',
+  'text/plain',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+];
+
+export function validateFile(file: File): { isValid: boolean; error?: string } {
+  if (file.size > MAX_FILE_SIZE) {
+    return {
+      isValid: false,
+      error: `File size exceeds the limit of ${formatBytes(MAX_FILE_SIZE)}`,
+    };
+  }
+
+  if (!ALLOWED_FILE_TYPES.includes(file.type)) {
+    return {
+      isValid: false,
+      error: 'File type not supported',
+    };
+  }
+
+  return { isValid: true };
+}
