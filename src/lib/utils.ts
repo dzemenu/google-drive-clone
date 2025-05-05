@@ -33,13 +33,16 @@ export async function uploadFile(file: File, folderId?: number) {
     });
 
     if (!response.ok) {
-      throw new Error('Failed to upload file');
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.error || 'Failed to upload file');
     }
 
     return await response.json();
   } catch (error) {
-    console.error('Error uploading file:', error);
-    throw error;
+    if (error instanceof Error) {
+      throw new Error(error.message);
+    }
+    throw new Error('An unexpected error occurred during upload');
   }
 }
 

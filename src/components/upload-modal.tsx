@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
-import { Upload, AlertCircle } from "lucide-react";
+import { Upload, AlertCircle, X } from "lucide-react";
 import { validateFile, formatBytes, MAX_FILE_SIZE } from "@/lib/utils";
 
 interface Folder {
@@ -21,6 +21,17 @@ export function UploadModal({ isOpen, onClose, folders, onUpload }: UploadModalP
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const resetState = () => {
+    setSelectedFile(null);
+    setError(null);
+    setIsUploading(false);
+  };
+
+  const handleClose = () => {
+    resetState();
+    onClose();
+  };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     setError(null);
@@ -44,16 +55,16 @@ export function UploadModal({ isOpen, onClose, folders, onUpload }: UploadModalP
       setIsUploading(true);
       setError(null);
       await onUpload(selectedFile, selectedFolder || undefined);
-      onClose();
+      handleClose();
     } catch (error) {
-      setError('Failed to upload file. Please try again.');
+      setError(error instanceof Error ? error.message : 'Failed to upload file. Please try again.');
     } finally {
       setIsUploading(false);
     }
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Upload File">
+    <Modal isOpen={isOpen} onClose={handleClose} title="Upload File">
       <div className="space-y-4">
         {/* Folder Selection */}
         <div>
@@ -89,7 +100,19 @@ export function UploadModal({ isOpen, onClose, folders, onUpload }: UploadModalP
               <div className="border-2 border-dashed rounded-lg p-4 text-center hover:bg-gray-50 dark:hover:bg-gray-700">
                 {selectedFile ? (
                   <div className="space-y-1">
-                    <p className="font-medium">{selectedFile.name}</p>
+                    <div className="flex items-center justify-between">
+                      <p className="font-medium">{selectedFile.name}</p>
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setSelectedFile(null);
+                          setError(null);
+                        }}
+                        className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full"
+                      >
+                        <X size={16} className="text-gray-500" />
+                      </button>
+                    </div>
                     <p className="text-sm text-gray-500">
                       {formatBytes(selectedFile.size)}
                     </p>
@@ -112,15 +135,21 @@ export function UploadModal({ isOpen, onClose, folders, onUpload }: UploadModalP
 
         {/* Error Message */}
         {error && (
-          <div className="flex items-center gap-2 text-red-500 text-sm">
-            <AlertCircle size={16} />
-            <span>{error}</span>
+          <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 text-red-500 rounded-lg">
+            <AlertCircle size={16} className="flex-shrink-0" />
+            <span className="text-sm">{error}</span>
+            <button
+              onClick={() => setError(null)}
+              className="ml-auto p-1 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-full"
+            >
+              <X size={14} />
+            </button>
           </div>
         )}
 
         {/* Upload Button */}
         <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="outline" onClick={handleClose}>
             Cancel
           </Button>
           <Button
