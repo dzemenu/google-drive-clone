@@ -1,10 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { db } from "@/lib/db";
 import { files } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
-import { unlink, rename } from "fs/promises";
-import path from "path";
+import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 
 export async function DELETE(
