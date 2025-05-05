@@ -63,4 +63,51 @@ export async function DELETE(
     console.error("[FOLDER_DELETE]", error);
     return new NextResponse("Internal Error", { status: 500 });
   }
+}
+
+export async function PATCH(
+  req: Request,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { userId } = await auth();
+    const { id } = await context.params;
+
+    if (!userId) {
+      return new NextResponse("Unauthorized", { status: 401 });
+    }
+
+    const folderId = parseInt(id);
+    if (isNaN(folderId)) {
+      return new NextResponse("Invalid folder ID", { status: 400 });
+    }
+
+    const { name } = await req.json();
+    if (!name || typeof name !== "string") {
+      return new NextResponse("Invalid name", { status: 400 });
+    }
+
+    // Update in database
+    const [updatedFolder] = await db
+      .update(folders)
+      .set({
+        name: name,
+      })
+      .where(
+        and(
+          eq(folders.id, folderId),
+          eq(folders.userId, userId)
+        )
+      )
+      .returning();
+
+    if (!updatedFolder) {
+      return new NextResponse("Folder not found", { status: 404 });
+    }
+
+    return NextResponse.json(updatedFolder);
+  } catch (error) {
+    console.error("[FOLDER_RENAME]", error);
+    return new NextResponse("Internal Error", { status: 500 });
+  }
 } 

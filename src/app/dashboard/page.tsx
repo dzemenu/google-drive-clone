@@ -1,6 +1,6 @@
 "use client";
 
-import { Folder, Trash, LogOut, Plus, Sun, Moon, Upload, File, ChevronDown, ChevronRight } from "lucide-react";
+import { Folder, Trash, LogOut, Plus, Sun, Moon, Upload, File, ChevronDown, ChevronRight, Pencil } from "lucide-react";
 import { useEffect, useState } from "react";
 import { UserButton, useUser, useClerk } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { Modal } from "@/components/ui/modal";
 import { UploadModal } from "@/components/upload-modal";
 import { ConfirmModal } from "@/components/confirm-modal";
 import { toast } from "react-hot-toast";
+import { RenameModal } from "@/components/rename-modal";
 
 interface Folder {
   id: number;
@@ -43,6 +44,10 @@ export default function Dashboard() {
   const [isDeleteFolderModalOpen, setIsDeleteFolderModalOpen] = useState(false);
   const [fileToDelete, setFileToDelete] = useState<FileItem | null>(null);
   const [folderToDelete, setFolderToDelete] = useState<Folder | null>(null);
+  const [isRenameFileModalOpen, setIsRenameFileModalOpen] = useState(false);
+  const [isRenameFolderModalOpen, setIsRenameFolderModalOpen] = useState(false);
+  const [fileToRename, setFileToRename] = useState<FileItem | null>(null);
+  const [folderToRename, setFolderToRename] = useState<Folder | null>(null);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", darkMode);
@@ -180,6 +185,68 @@ export default function Dashboard() {
     }
   };
 
+  const handleRenameFile = async (newName: string) => {
+    if (!fileToRename) return;
+
+    try {
+      const response = await fetch(`/api/files/${fileToRename.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name: newName }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to rename file");
+      }
+
+      const updatedFile = await response.json();
+      setFiles((prev) =>
+        prev.map((file) =>
+          file.id === updatedFile.id ? updatedFile : file
+        )
+      );
+      toast.success("File renamed successfully");
+      setIsRenameFileModalOpen(false);
+      setFileToRename(null);
+    } catch (error) {
+      console.error("Error renaming file:", error);
+      toast.error("Failed to rename file");
+    }
+  };
+
+  const handleRenameFolder = async (newName: string) => {
+    if (!folderToRename) return;
+
+    try {
+      const response = await fetch(`/api/folders/${folderToRename.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name: newName }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to rename folder");
+      }
+
+      const updatedFolder = await response.json();
+      setFolders((prev) =>
+        prev.map((folder) =>
+          folder.id === updatedFolder.id ? updatedFolder : folder
+        )
+      );
+      toast.success("Folder renamed successfully");
+      setIsRenameFolderModalOpen(false);
+      setFolderToRename(null);
+    } catch (error) {
+      console.error("Error renaming folder:", error);
+      toast.error("Failed to rename folder");
+    }
+  };
+
   return (
     <div className="flex min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
       {/* Sidebar */}
@@ -248,16 +315,26 @@ export default function Dashboard() {
                         key={file.id}
                         className="flex justify-between items-center p-2 rounded hover:bg-gray-50 dark:hover:bg-gray-700"
                       >
-                        <a
-                          href={file.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-2 text-blue-600 dark:text-blue-400"
-                        >
-                          <File size={20} /> {file.name}
-                        </a>
+                        <div className="flex items-center gap-2">
+                          <File size={20} />
+                          <a
+                            href={file.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm hover:underline"
+                          >
+                            {file.name}
+                          </a>
+                        </div>
                         <div className="flex items-center gap-4">
                           <span className="text-sm text-gray-500">{formatBytes(parseInt(file.size))}</span>
+                          <Button variant="ghost" size="icon" onClick={(e) => {
+                            e.stopPropagation();
+                            setFileToRename(file);
+                            setIsRenameFileModalOpen(true);
+                          }}>
+                            <Pencil className="text-blue-500" size={18} />
+                          </Button>
                           <Button variant="ghost" size="icon" onClick={(e) => {
                             e.stopPropagation();
                             setFileToDelete(file);
@@ -290,29 +367,44 @@ export default function Dashboard() {
                       return (
                         <li key={folder.id} className="space-y-1">
                           <div
-                            className={`flex justify-between items-center p-2 rounded cursor-pointer ${
-                              selectedFolder === folder.id ? 'bg-blue-50 dark:bg-blue-900' : 'hover:bg-gray-50 dark:hover:bg-gray-700'
-                            }`}
-                            onClick={() => {
-                              setSelectedFolder(folder.id);
-                              toggleFolder(folder.id);
-                            }}
+                            className="flex items-center justify-between p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
                           >
-                            <span className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
-                              {isExpanded ? (
-                                <ChevronDown size={20} className="text-gray-500" />
-                              ) : (
-                                <ChevronRight size={20} className="text-gray-500" />
-                              )}
-                              <Folder size={20} /> {folder.name}
-                            </span>
-                            <Button variant="ghost" size="icon" onClick={(e) => {
-                              e.stopPropagation();
-                              setFolderToDelete(folder);
-                              setIsDeleteFolderModalOpen(true);
-                            }}>
-                              <Trash className="text-red-500" size={18} />
-                            </Button>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => toggleFolder(folder.id)}
+                                className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
+                              >
+                                {isExpanded ? (
+                                  <ChevronDown className="h-4 w-4" />
+                                ) : (
+                                  <ChevronRight className="h-4 w-4" />
+                                )}
+                              </button>
+                              <Folder size={20} />
+                              <span className="text-sm">{folder.name}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setFolderToRename(folder);
+                                  setIsRenameFolderModalOpen(true);
+                                }}
+                                className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
+                              >
+                                <Pencil className="h-4 w-4 text-blue-500" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setFolderToDelete(folder);
+                                  setIsDeleteFolderModalOpen(true);
+                                }}
+                                className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
+                              >
+                                <Trash className="h-4 w-4 text-red-500" />
+                              </button>
+                            </div>
                           </div>
                           
                           {/* Folder Files */}
@@ -328,18 +420,28 @@ export default function Dashboard() {
                                     key={file.id}
                                     className="flex justify-between items-center p-2 rounded hover:bg-gray-50 dark:hover:bg-gray-700"
                                   >
-                                    <a
-                                      href={file.url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="flex items-center gap-2 text-blue-600 dark:text-blue-400"
-                                    >
-                                      <File size={20} /> {file.name}
-                                    </a>
+                                    <div className="flex items-center gap-2">
+                                      <File size={20} />
+                                      <a
+                                        href={file.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-sm hover:underline"
+                                      >
+                                        {file.name}
+                                      </a>
+                                    </div>
                                     <div className="flex items-center gap-4">
                                       <span className="text-sm text-gray-500">
                                         {formatBytes(parseInt(file.size))}
                                       </span>
+                                      <Button variant="ghost" size="icon" onClick={(e) => {
+                                        e.stopPropagation();
+                                        setFileToRename(file);
+                                        setIsRenameFileModalOpen(true);
+                                      }}>
+                                        <Pencil className="text-blue-500" size={18} />
+                                      </Button>
                                       <Button variant="ghost" size="icon" onClick={(e) => {
                                         e.stopPropagation();
                                         setFileToDelete(file);
@@ -430,6 +532,31 @@ export default function Dashboard() {
         onConfirm={() => folderToDelete && handleDeleteFolder(folderToDelete)}
         title="Delete Folder"
         description="Are you sure you want to delete this folder and all its contents? This action cannot be undone."
+      />
+
+      {/* Add rename modals */}
+      <RenameModal
+        isOpen={isRenameFileModalOpen}
+        onClose={() => {
+          setIsRenameFileModalOpen(false);
+          setFileToRename(null);
+        }}
+        onRename={handleRenameFile}
+        title="Rename File"
+        currentName={fileToRename?.name || ""}
+        type="file"
+      />
+
+      <RenameModal
+        isOpen={isRenameFolderModalOpen}
+        onClose={() => {
+          setIsRenameFolderModalOpen(false);
+          setFolderToRename(null);
+        }}
+        onRename={handleRenameFolder}
+        title="Rename Folder"
+        currentName={folderToRename?.name || ""}
+        type="folder"
       />
     </div>
   );
