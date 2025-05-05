@@ -2,6 +2,10 @@
 
 A modern, responsive Google Drive clone built with Next.js, featuring file management, folder organization, and a beautiful user interface.
 
+## Live Demo
+
+Check out the live demo: [Google Drive Clone](https://google-drive-clone-coral.vercel.app/)
+
 ## Features
 
 - 🔐 **Authentication**
@@ -55,7 +59,7 @@ A modern, responsive Google Drive clone built with Next.js, featuring file manag
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/google-drive-clone.git
+   git clone https://github.com/dzemenu/google-drive-clone.git
    cd google-drive-clone
    ```
 
@@ -155,3 +159,16 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Tailwind CSS](https://tailwindcss.com/)
 - [Drizzle ORM](https://orm.drizzle.team/)
 - [shadcn/ui](https://ui.shadcn.com/)
+
+## Deployment
+
+This project is deployed on Vercel. You can deploy your own version by:
+
+1. Fork this repository
+2. Create a new project on [Vercel](https://vercel.com)
+3. Import your forked repository
+4. Add your environment variables:
+   - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
+   - `CLERK_SECRET_KEY`
+   - `DATABASE_URL`
+5. Deploy!
