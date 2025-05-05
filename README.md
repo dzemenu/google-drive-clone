@@ -45,7 +45,7 @@ Check out the live demo: [Google Drive Clone](https://google-drive-clone-coral.v
 - **Styling:** Tailwind CSS
 - **UI Components:** Custom components with shadcn/ui
 - **Icons:** Lucide Icons
-- **File Storage:** Local storage with public/uploads directory
+- **File Storage:** Uploadthing (Cloud Storage)
 
 ## Getting Started
 
@@ -74,6 +74,7 @@ Check out the live demo: [Google Drive Clone](https://google-drive-clone-coral.v
    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
    CLERK_SECRET_KEY=your_clerk_secret_key
    DATABASE_URL=your_database_url
+   UPLOADTHING_SECRET=your_uploadthing_secret
    ```
 
 4. Run database migrations:

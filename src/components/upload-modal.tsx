@@ -2,7 +2,9 @@ import { useState } from "react";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { Upload, AlertCircle, X } from "lucide-react";
-import { validateFile, formatBytes, MAX_FILE_SIZE } from "@/lib/utils";
+import { useUploadThing } from "@/lib/uploadthing";
+import { useDropzone } from "react-dropzone";
+import { toast } from "react-hot-toast";
 
 interface Folder {
   id: number;
@@ -18,12 +20,72 @@ interface UploadModalProps {
 
 export function UploadModal({ isOpen, onClose, folders, onUpload }: UploadModalProps) {
   const [selectedFolder, setSelectedFolder] = useState<number | null>(null);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+
+  const { startUpload, isUploading: isUploadThingUploading } = useUploadThing("fileUploader", {
+    onClientUploadComplete: async (res) => {
+      if (res) {
+        const file = res[0];
+        try {
+          // Create file record in database with folder assignment
+          const response = await fetch("/api/files", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              name: file.name,
+              url: file.url,
+              size: file.size,
+              folderId: selectedFolder,
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error("Failed to create file record");
+          }
+
+          toast.success("File uploaded successfully");
+          handleClose();
+          // Trigger a page refresh to update the file list
+          window.location.reload();
+        } catch (error) {
+          setError(error instanceof Error ? error.message : 'Failed to create file record');
+          toast.error("Failed to create file record");
+        }
+      }
+    },
+    onUploadError: (error: Error) => {
+      setError(error.message);
+      toast.error(error.message);
+    },
+  });
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop: async (acceptedFiles) => {
+      if (acceptedFiles.length > 0) {
+        setError(null);
+        setIsUploading(true);
+        try {
+          await startUpload(acceptedFiles);
+        } catch (error) {
+          setError(error instanceof Error ? error.message : 'Failed to upload file');
+          toast.error("Failed to upload file");
+        } finally {
+          setIsUploading(false);
+        }
+      }
+    },
+    maxSize: 8 * 1024 * 1024, // 8MB
+    accept: {
+      'image/*': ['.png', '.jpg', '.jpeg', '.gif', '.webp'],
+      'application/pdf': ['.pdf'],
+    },
+  });
 
   const resetState = () => {
-    setSelectedFile(null);
+    setSelectedFolder(null);
     setError(null);
     setIsUploading(false);
   };
@@ -31,36 +93,6 @@ export function UploadModal({ isOpen, onClose, folders, onUpload }: UploadModalP
   const handleClose = () => {
     resetState();
     onClose();
-  };
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setError(null);
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const validation = validateFile(file);
-    if (!validation.isValid) {
-      setError(validation.error || 'Invalid file');
-      setSelectedFile(null);
-      return;
-    }
-
-    setSelectedFile(file);
-  };
-
-  const handleUpload = async () => {
-    if (!selectedFile) return;
-
-    try {
-      setIsUploading(true);
-      setError(null);
-      await onUpload(selectedFile, selectedFolder || undefined);
-      handleClose();
-    } catch (error) {
-      setError(error instanceof Error ? error.message : 'Failed to upload file. Please try again.');
-    } finally {
-      setIsUploading(false);
-    }
   };
 
   return (
@@ -83,53 +115,24 @@ export function UploadModal({ isOpen, onClose, folders, onUpload }: UploadModalP
           </select>
         </div>
 
-        {/* File Selection */}
+        {/* File Upload Area */}
         <div>
           <label className="block text-sm font-medium mb-2">Select File</label>
-          <div className="flex items-center gap-2">
-            <input
-              type="file"
-              onChange={handleFileSelect}
-              className="hidden"
-              id="file-upload"
-            />
-            <label
-              htmlFor="file-upload"
-              className="flex-1 cursor-pointer"
-            >
-              <div className="border-2 border-dashed rounded-lg p-4 text-center hover:bg-gray-50 dark:hover:bg-gray-700">
-                {selectedFile ? (
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <p className="font-medium">{selectedFile.name}</p>
-                      <button
-                        onClick={(e) => {
-                          e.preventDefault();
-                          setSelectedFile(null);
-                          setError(null);
-                        }}
-                        className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full"
-                      >
-                        <X size={16} className="text-gray-500" />
-                      </button>
-                    </div>
-                    <p className="text-sm text-gray-500">
-                      {formatBytes(selectedFile.size)}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-1">
-                    <Upload className="mx-auto h-8 w-8 text-gray-400" />
-                    <p className="text-sm text-gray-500">
-                      Click to select a file
-                    </p>
-                    <p className="text-xs text-gray-400">
-                      Max size: {formatBytes(MAX_FILE_SIZE)}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </label>
+          <div
+            {...getRootProps()}
+            className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors
+              ${isDragActive ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+          >
+            <input {...getInputProps()} />
+            <div className="space-y-1">
+              <Upload className="mx-auto h-8 w-8 text-gray-400" />
+              <p className="text-sm text-gray-500">
+                {isDragActive ? "Drop the file here" : "Drag & drop or click to select a file"}
+              </p>
+              <p className="text-xs text-gray-400">
+                Max size: 8MB
+              </p>
+            </div>
           </div>
         </div>
 
@@ -153,10 +156,13 @@ export function UploadModal({ isOpen, onClose, folders, onUpload }: UploadModalP
             Cancel
           </Button>
           <Button
-            onClick={handleUpload}
-            disabled={!selectedFile || isUploading}
+            onClick={() => {
+              const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+              input?.click();
+            }}
+            disabled={isUploading || isUploadThingUploading}
           >
-            {isUploading ? "Uploading..." : "Upload"}
+            {isUploading || isUploadThingUploading ? "Uploading..." : "Select File"}
           </Button>
         </div>
       </div>

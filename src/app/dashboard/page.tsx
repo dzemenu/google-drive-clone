@@ -11,6 +11,7 @@ import { ConfirmModal } from "@/components/confirm-modal";
 import { toast } from "react-hot-toast";
 import { RenameModal } from "@/components/rename-modal";
 import { FilePreview } from "@/components/file-preview";
+import { useUploadThing } from "@/lib/uploadthing";
 
 interface Folder {
   id: number;
@@ -50,6 +51,42 @@ export default function Dashboard() {
   const [folderToRename, setFolderToRename] = useState<Folder | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<FileItem | null>(null);
+
+  const { startUpload, isUploading } = useUploadThing("fileUploader", {
+    onClientUploadComplete: async (res) => {
+      if (res) {
+        const file = res[0];
+        try {
+          // Create file record in database
+          const response = await fetch("/api/files", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              name: file.name,
+              url: file.url,
+              size: file.size,
+              folderId: null, // We'll handle folder assignment in the upload modal
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error("Failed to create file record");
+          }
+
+          await fetchFiles();
+          toast.success("File uploaded successfully");
+        } catch (error) {
+          console.error("Error creating file record:", error);
+          toast.error("Failed to create file record");
+        }
+      }
+    },
+    onUploadError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", darkMode);
@@ -129,10 +166,10 @@ export default function Dashboard() {
 
   const handleFileUpload = async (file: globalThis.File, folderId?: number) => {
     try {
-      await uploadFile(file, folderId);
-      await fetchFiles();
+      await startUpload([file]);
     } catch (error) {
       console.error("Error uploading file:", error);
+      toast.error("Failed to upload file");
     }
   };
 
