@@ -4,7 +4,7 @@ import { Folder, Trash, LogOut, Plus, Sun, Moon, Upload, File, ChevronDown, Chev
 import { useEffect, useState } from "react";
 import { UserButton, useUser, useClerk } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
-import { uploadFile, formatBytes } from "@/lib/utils";
+import {  formatBytes } from "@/lib/utils";
 import { Modal } from "@/components/ui/modal";
 import { UploadModal } from "@/components/upload-modal";
 import { ConfirmModal } from "@/components/confirm-modal";
@@ -52,7 +52,7 @@ export default function Dashboard() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<FileItem | null>(null);
 
-  const { startUpload, isUploading } = useUploadThing("fileUploader", {
+  const { startUpload,  } = useUploadThing("fileUploader", {
     onClientUploadComplete: async (res) => {
       if (res) {
         const file = res[0];
@@ -164,7 +164,7 @@ export default function Dashboard() {
     }
   };
 
-  const handleFileUpload = async (file: globalThis.File, folderId?: number) => {
+  const handleFileUpload = async (file: globalThis.File) => {
     try {
       await startUpload([file]);
     } catch (error) {
