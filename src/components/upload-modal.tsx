@@ -15,10 +15,9 @@ interface UploadModalProps {
   isOpen: boolean;
   onClose: () => void;
   folders: Folder[];
-  onUpload: (file: File, folderId?: number) => Promise<void>;
 }
 
-export function UploadModal({ isOpen, onClose, folders, onUpload }: UploadModalProps) {
+export function UploadModal({ isOpen, onClose, folders }: UploadModalProps) {
   const [selectedFolder, setSelectedFolder] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);

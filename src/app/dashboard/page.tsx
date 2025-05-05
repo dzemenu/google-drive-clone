@@ -561,7 +561,6 @@ export default function Dashboard() {
         isOpen={isUploadModalOpen}
         onClose={() => setIsUploadModalOpen(false)}
         folders={folders}
-        onUpload={handleFileUpload}
       />
 
       {/* Add confirmation modals */}
