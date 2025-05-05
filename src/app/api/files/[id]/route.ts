@@ -5,7 +5,7 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 
 export async function DELETE(
-  req: Request,
+  _: Request,
   context: { params: { id: string } }
 ) {
   try {
