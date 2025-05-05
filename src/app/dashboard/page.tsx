@@ -35,7 +35,6 @@ export default function Dashboard() {
   const [newFolderName, setNewFolderName] = useState("");
   const [darkMode, setDarkMode] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedFolder, setSelectedFolder] = useState<number | null>(null);
   const [isAddFolderModalOpen, setIsAddFolderModalOpen] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [expandedFolders, setExpandedFolders] = useState<Set<number>>(new Set());
