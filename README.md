@@ -1,6 +1,6 @@
 # Google Drive Clone
 
-A modern, responsive Google Drive clone built with Next.js, featuring file management, folder organization, and a beautiful user interface.
+A modern, responsive Google Drive  minimal clone built with Next.js, featuring file management, folder organization, and a beautiful user interface.
 
 ## Live Demo
 
