@@ -1,7 +1,7 @@
 "use client";
 
 import { Folder, Trash, LogOut, Plus, Sun, Moon, Upload, File, ChevronDown, ChevronRight } from "lucide-react";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { UserButton, useUser, useClerk } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
 import { uploadFile, formatBytes } from "@/lib/utils";

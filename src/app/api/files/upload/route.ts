@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { getDb } from "@/lib/db";
 import { files } from "@/lib/db/schema";
@@ -11,19 +11,15 @@ export async function POST(request: NextRequest) {
     const { userId } = await auth();
 
     if (!userId) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-      });
+      return new NextResponse("Unauthorized", { status: 401 });
     }
 
     const formData = await request.formData();
     const file = formData.get("file") as File;
-    const folderId = formData.get("folderId");
+    const folderId = formData.get("folderId") as string | null;
 
     if (!file) {
-      return new Response(JSON.stringify({ error: "No file provided" }), {
-        status: 400,
-      });
+      return new NextResponse("No file provided", { status: 400 });
     }
 
     // Create uploads directory if it doesn't exist
@@ -32,6 +28,7 @@ export async function POST(request: NextRequest) {
       await writeFile(join(uploadsDir, ".gitkeep"), "");
     } catch (error) {
       // Directory already exists
+      console.error("Error creating uploads directory:", error);  
     }
 
     // Generate unique filename
@@ -51,18 +48,16 @@ export async function POST(request: NextRequest) {
         name: file.name,
         url: `/uploads/${uniqueFilename}`,
         size: file.size.toString(),
-        folderId: folderId ? parseInt(folderId.toString()) : null,
-        userId: userId,
+        folderId: folderId ? parseInt(folderId) : null,
+        userId,
       })
       .returning();
 
-    return new Response(JSON.stringify(newFile), {
-      status: 201,
-    });
+    return NextResponse.json(newFile);
   } catch (error) {
     console.error("Error uploading file:", error);
-    return new Response(
-      JSON.stringify({ error: "Failed to upload file" }),
+    return new NextResponse(
+      `Error uploading file: ${error instanceof Error ? error.message : 'Unknown error'}`,
       { status: 500 }
     );
   }
