@@ -1,6 +1,6 @@
 "use client";
 
-import { Folder, Trash, LogOut, Plus, Sun, Moon, Upload, File, ChevronDown, ChevronRight, Pencil } from "lucide-react";
+import { Folder, Trash, LogOut, Plus, Sun, Moon, Upload, File, ChevronDown, ChevronRight, Pencil, Menu } from "lucide-react";
 import { useEffect, useState } from "react";
 import { UserButton, useUser, useClerk } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { UploadModal } from "@/components/upload-modal";
 import { ConfirmModal } from "@/components/confirm-modal";
 import { toast } from "react-hot-toast";
 import { RenameModal } from "@/components/rename-modal";
+import { FilePreview } from "@/components/file-preview";
 
 interface Folder {
   id: number;
@@ -48,6 +49,8 @@ export default function Dashboard() {
   const [isRenameFolderModalOpen, setIsRenameFolderModalOpen] = useState(false);
   const [fileToRename, setFileToRename] = useState<FileItem | null>(null);
   const [folderToRename, setFolderToRename] = useState<Folder | null>(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<FileItem | null>(null);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", darkMode);
@@ -249,49 +252,65 @@ export default function Dashboard() {
 
   return (
     <div className="flex min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
+      {/* Mobile Menu Button */}
+      <button
+        onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+        className="fixed top-4 left-4 z-50 p-2 rounded-md bg-white dark:bg-gray-800 shadow-md md:hidden"
+      >
+        <Menu size={24} />
+      </button>
+
       {/* Sidebar */}
-      <aside className="w-64 bg-white dark:bg-gray-800 shadow-md p-4 space-y-4">
-        <div className="flex justify-between items-center">
-          <Button onClick={() => setIsAddFolderModalOpen(true)} className="flex gap-2 w-44">
+      <aside className={`fixed md:static inset-y-0 left-0 z-40 w-64 bg-white dark:bg-gray-800 shadow-md p-4 space-y-4 transform transition-transform duration-200 ease-in-out ${
+        isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+      }`}>
+        <div className="flex flex-col gap-4 mt-8">
+          <Button onClick={() => setIsAddFolderModalOpen(true)} className="flex gap-2 w-full justify-center items-center">
             <Plus size={18} /> Add Folder
           </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setDarkMode(!darkMode)}
-          >
-            {darkMode ? <Sun size={18} /> : <Moon size={18} />}
-          </Button>
-        </div>
-
-        <div className="pt-4">
           <Button
             onClick={() => setIsUploadModalOpen(true)}
             className="flex gap-2 w-full justify-center items-center"
           >
             <Upload size={18} /> Upload File
           </Button>
-        </div>
-
-        <nav className="space-y-2 pt-4">
-          <div
-            className="flex items-center gap-2 hover:text-red-500 cursor-pointer"
+          <Button
+            variant="destructive"
             onClick={() => signOut()}
+            className="flex gap-2 w-full justify-center items-center"
           >
             <LogOut size={18} /> Sign out
-          </div>
-        </nav>
+          </Button>
+        </div>
       </aside>
 
+      {/* Overlay for mobile */}
+      {isSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 z-30 md:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
       {/* Main */}
-      <main className="flex-1 p-6">
-        <div className="flex justify-between">
-          <h1 className="text-2xl font-bold mb-4">My Drive</h1>
-          <div className="flex flex-col items-end">
-            <UserButton />
-            <span className="text-sm font-semibold">
-              {user?.firstName?.toUpperCase()}
-            </span>
+      <main className="flex-1 p-4 md:p-6 mt-16 md:mt-0">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold">My Drive</h1>
+          <div className="flex items-center gap-4">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setDarkMode(!darkMode)}
+              className="rounded-full"
+            >
+              {darkMode ? <Sun size={18} /> : <Moon size={18} />}
+            </Button>
+            <div className="flex flex-col items-end">
+              <UserButton />
+              <span className="text-sm font-semibold">
+                {user?.firstName?.toUpperCase()}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -313,18 +332,16 @@ export default function Dashboard() {
                     {getFolderFiles(null).map((file) => (
                       <li
                         key={file.id}
-                        className="flex justify-between items-center p-2 rounded hover:bg-gray-50 dark:hover:bg-gray-700"
+                        className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-2 rounded hover:bg-gray-50 dark:hover:bg-gray-700 gap-2"
                       >
                         <div className="flex items-center gap-2">
                           <File size={20} />
-                          <a
-                            href={file.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-sm hover:underline"
+                          <button
+                            onClick={() => setSelectedFile(file)}
+                            className="text-sm hover:underline text-left"
                           >
                             {file.name}
-                          </a>
+                          </button>
                         </div>
                         <div className="flex items-center gap-4">
                           <span className="text-sm text-gray-500">{formatBytes(parseInt(file.size))}</span>
@@ -418,7 +435,7 @@ export default function Dashboard() {
                                 folderFiles.map((file) => (
                                   <div
                                     key={file.id}
-                                    className="flex justify-between items-center p-2 rounded hover:bg-gray-50 dark:hover:bg-gray-700"
+                                    className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-2 rounded hover:bg-gray-50 dark:hover:bg-gray-700 gap-2"
                                   >
                                     <div className="flex items-center gap-2">
                                       <File size={20} />
@@ -558,6 +575,15 @@ export default function Dashboard() {
         currentName={folderToRename?.name || ""}
         type="folder"
       />
+
+      {/* File Preview Modal */}
+      <Modal
+        isOpen={!!selectedFile}
+        onClose={() => setSelectedFile(null)}
+        title={selectedFile?.name || ""}
+      >
+        {selectedFile && <FilePreview file={selectedFile} />}
+      </Modal>
     </div>
   );
 }
