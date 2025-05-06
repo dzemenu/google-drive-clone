@@ -1,14 +1,14 @@
 "use client";
 
-import { Folder, Trash, LogOut, Plus, Sun, Moon, Upload, File, ChevronDown, ChevronRight, Pencil, Menu } from "lucide-react";
 import { useEffect, useState } from "react";
-import { UserButton, useUser, useClerk } from "@clerk/nextjs";
-import { Button } from "@/components/ui/button";
-import { formatBytes } from "@/lib/utils";
+import { toast } from "react-hot-toast";
+import { Sidebar } from "@/components/sidebar";
+import { Header } from "@/components/header";
+import { FileList } from "@/components/file-list";
 import { Modal } from "@/components/ui/modal";
+import { Button } from "@/components/ui/button";
 import { UploadModal } from "@/components/upload-modal";
 import { ConfirmModal } from "@/components/confirm-modal";
-import { toast } from "react-hot-toast";
 import { RenameModal } from "@/components/rename-modal";
 import { FilePreview } from "@/components/file-preview";
 
@@ -38,8 +38,6 @@ export default function Dashboard() {
   const [isAddFolderModalOpen, setIsAddFolderModalOpen] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [expandedFolders, setExpandedFolders] = useState<Set<number>>(new Set());
-  const { user } = useUser();
-  const { signOut } = useClerk();
   const [isDeleteFileModalOpen, setIsDeleteFileModalOpen] = useState(false);
   const [isDeleteFolderModalOpen, setIsDeleteFolderModalOpen] = useState(false);
   const [fileToDelete, setFileToDelete] = useState<FileItem | null>(null);
@@ -63,7 +61,6 @@ export default function Dashboard() {
         throw new Error("Failed to fetch folders");
       }
       const data = await res.json();
-      // Ensure data is an array
       if (Array.isArray(data)) {
         setFolders(data);
       } else {
@@ -137,10 +134,6 @@ export default function Dashboard() {
       }
       return next;
     });
-  };
-
-  const getFolderFiles = (folderId: number | null) => {
-    return files.filter(file => file.folderId === folderId);
   };
 
   const handleDeleteFile = async (file: FileItem) => {
@@ -242,233 +235,46 @@ export default function Dashboard() {
 
   return (
     <div className="flex min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
-      {/* Mobile Menu Button */}
-      <button
-        onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-        className="fixed top-4 left-4 z-50 p-2 rounded-md bg-white dark:bg-gray-800 shadow-md md:hidden"
-      >
-        <Menu size={24} />
-      </button>
+      <Sidebar
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+        onAddFolder={() => setIsAddFolderModalOpen(true)}
+        onUpload={() => setIsUploadModalOpen(true)}
+      />
 
-      {/* Sidebar */}
-      <aside className={`fixed md:static inset-y-0 left-0 z-40 w-64 bg-white dark:bg-gray-800 shadow-md p-4 space-y-4 transform transition-transform duration-200 ease-in-out ${
-        isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
-      }`}>
-        <div className="flex flex-col gap-4 mt-8">
-          <Button onClick={() => setIsAddFolderModalOpen(true)} className="flex gap-2 w-full justify-center items-center">
-            <Plus size={18} /> Add Folder
-          </Button>
-          <Button
-            onClick={() => setIsUploadModalOpen(true)}
-            className="flex gap-2 w-full justify-center items-center"
-          >
-            <Upload size={18} /> Upload File
-          </Button>
-          <Button
-            variant="destructive"
-            onClick={() => signOut()}
-            className="flex gap-2 w-full justify-center items-center"
-          >
-            <LogOut size={18} /> Sign out
-          </Button>
-        </div>
-      </aside>
-
-      {/* Overlay for mobile */}
-      {isSidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-30 md:hidden"
-          onClick={() => setIsSidebarOpen(false)}
-        />
-      )}
-
-      {/* Main */}
       <main className="flex-1 p-4 md:p-6 mt-16 md:mt-0">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold">My Drive</h1>
-          <div className="flex items-center gap-4">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => setDarkMode(!darkMode)}
-              className="rounded-full"
-            >
-              {darkMode ? <Sun size={18} /> : <Moon size={18} />}
-            </Button>
-            <div className="flex flex-col items-end">
-              <UserButton />
-              <span className="text-sm font-semibold">
-                {user?.firstName?.toUpperCase()}
-              </span>
-            </div>
-          </div>
-        </div>
+        <Header
+          darkMode={darkMode}
+          onToggleDarkMode={() => setDarkMode(!darkMode)}
+        />
 
         <div className="rounded-lg shadow-sm bg-white dark:bg-gray-800 p-4">
           {isLoading ? (
             <p className="text-gray-500 dark:text-gray-400">Loading...</p>
           ) : (
-            <div className="space-y-4">
-              {/* Root Files */}
-              <div>
-                <h2 className="text-lg font-semibold mb-2">Root Directory</h2>
-                {getFolderFiles(null).length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-8">
-                    <File size={48} className="text-gray-400 mb-4" />
-                    <p className="text-gray-500 dark:text-gray-400">No files in root</p>
-                  </div>
-                ) : (
-                  <ul className="space-y-2">
-                    {getFolderFiles(null).map((file) => (
-                      <li
-                        key={file.id}
-                        className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-2 rounded hover:bg-gray-50 dark:hover:bg-gray-700 gap-2"
-                      >
-                        <div className="flex items-center gap-2">
-                          <File size={20} />
-                          <button
-                            onClick={() => setSelectedFile(file)}
-                            className="text-sm hover:underline text-left"
-                          >
-                            {file.name}
-                          </button>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <span className="text-sm text-gray-500">{formatBytes(parseInt(file.size))}</span>
-                          <Button variant="ghost" size="icon" onClick={(e) => {
-                            e.stopPropagation();
-                            setFileToRename(file);
-                            setIsRenameFileModalOpen(true);
-                          }}>
-                            <Pencil className="text-blue-500" size={18} />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={(e) => {
-                            e.stopPropagation();
-                            setFileToDelete(file);
-                            setIsDeleteFileModalOpen(true);
-                          }}>
-                            <Trash className="text-red-500" size={18} />
-                          </Button>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-
-              {/* Folders with their files */}
-              <div>
-                <h2 className="text-lg font-semibold mb-2">Folders</h2>
-                {folders.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-8">
-                    <Folder size={48} className="text-gray-400 mb-4" />
-                    <p className="text-gray-500 dark:text-gray-400">No folders yet</p>
-                    <p className="text-sm text-gray-400 mt-2">Create your first folder to get started</p>
-                  </div>
-                ) : (
-                  <ul className="space-y-2">
-                    {folders.map((folder) => {
-                      const folderFiles = getFolderFiles(folder.id);
-                      const isExpanded = expandedFolders.has(folder.id);
-                      
-                      return (
-                        <li key={folder.id} className="space-y-1">
-                          <div
-                            className="flex items-center justify-between p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
-                          >
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => toggleFolder(folder.id)}
-                                className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
-                              >
-                                {isExpanded ? (
-                                  <ChevronDown className="h-4 w-4" />
-                                ) : (
-                                  <ChevronRight className="h-4 w-4" />
-                                )}
-                              </button>
-                              <Folder size={20} />
-                              <span className="text-sm">{folder.name}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setFolderToRename(folder);
-                                  setIsRenameFolderModalOpen(true);
-                                }}
-                                className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
-                              >
-                                <Pencil className="h-4 w-4 text-blue-500" />
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setFolderToDelete(folder);
-                                  setIsDeleteFolderModalOpen(true);
-                                }}
-                                className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
-                              >
-                                <Trash className="h-4 w-4 text-red-500" />
-                              </button>
-                            </div>
-                          </div>
-                          
-                          {/* Folder Files */}
-                          {isExpanded && (
-                            <div className="ml-8 space-y-2">
-                              {folderFiles.length === 0 ? (
-                                <p className="text-sm text-gray-500 dark:text-gray-400 py-2">
-                                  No files in this folder
-                                </p>
-                              ) : (
-                                folderFiles.map((file) => (
-                                  <div
-                                    key={file.id}
-                                    className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-2 rounded hover:bg-gray-50 dark:hover:bg-gray-700 gap-2"
-                                  >
-                                    <div className="flex items-center gap-2">
-                                      <File size={20} />
-                                      <a
-                                        href={file.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-sm hover:underline"
-                                      >
-                                        {file.name}
-                                      </a>
-                                    </div>
-                                    <div className="flex items-center gap-4">
-                                      <span className="text-sm text-gray-500">
-                                        {formatBytes(parseInt(file.size))}
-                                      </span>
-                                      <Button variant="ghost" size="icon" onClick={(e) => {
-                                        e.stopPropagation();
-                                        setFileToRename(file);
-                                        setIsRenameFileModalOpen(true);
-                                      }}>
-                                        <Pencil className="text-blue-500" size={18} />
-                                      </Button>
-                                      <Button variant="ghost" size="icon" onClick={(e) => {
-                                        e.stopPropagation();
-                                        setFileToDelete(file);
-                                        setIsDeleteFileModalOpen(true);
-                                      }}>
-                                        <Trash className="text-red-500" size={18} />
-                                      </Button>
-                                    </div>
-                                  </div>
-                                ))
-                              )}
-                            </div>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </div>
-            </div>
+            <FileList
+              files={files}
+              folders={folders}
+              expandedFolders={expandedFolders}
+              onToggleFolder={toggleFolder}
+              onRenameFile={(file) => {
+                setFileToRename(file);
+                setIsRenameFileModalOpen(true);
+              }}
+              onDeleteFile={(file) => {
+                setFileToDelete(file);
+                setIsDeleteFileModalOpen(true);
+              }}
+              onRenameFolder={(folder) => {
+                setFolderToRename(folder);
+                setIsRenameFolderModalOpen(true);
+              }}
+              onDeleteFolder={(folder) => {
+                setFolderToDelete(folder);
+                setIsDeleteFolderModalOpen(true);
+              }}
+              onFileClick={setSelectedFile}
+            />
           )}
         </div>
       </main>
@@ -517,7 +323,7 @@ export default function Dashboard() {
         folders={folders}
       />
 
-      {/* Add confirmation modals */}
+      {/* Delete File Modal */}
       <ConfirmModal
         isOpen={isDeleteFileModalOpen}
         onClose={() => {
@@ -529,6 +335,7 @@ export default function Dashboard() {
         description="Are you sure you want to delete this file? This action cannot be undone."
       />
 
+      {/* Delete Folder Modal */}
       <ConfirmModal
         isOpen={isDeleteFolderModalOpen}
         onClose={() => {
@@ -540,7 +347,7 @@ export default function Dashboard() {
         description="Are you sure you want to delete this folder and all its contents? This action cannot be undone."
       />
 
-      {/* Add rename modals */}
+      {/* Rename File Modal */}
       <RenameModal
         isOpen={isRenameFileModalOpen}
         onClose={() => {
@@ -553,6 +360,7 @@ export default function Dashboard() {
         type="file"
       />
 
+      {/* Rename Folder Modal */}
       <RenameModal
         isOpen={isRenameFolderModalOpen}
         onClose={() => {
