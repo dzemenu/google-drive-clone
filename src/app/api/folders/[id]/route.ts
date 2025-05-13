@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { db } from "@/lib/db";
+import { getDb } from "@/lib/db";
 import { folders, files } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { unlink } from "fs/promises";
@@ -23,13 +23,19 @@ export async function DELETE(
       return new NextResponse("Invalid folder ID", { status: 400 });
     }
 
+    const db = await getDb();
+    if (!db) {
+      return new NextResponse("Database connection failed", { status: 500 });
+    }
+
     // Get all files in the folder
-    const folderFiles = await db.query.files.findMany({
-      where: and(
+    const folderFiles = await db
+      .select()
+      .from(files)
+      .where(and(
         eq(files.folderId, folderId),
         eq(files.userId, userId)
-      ),
-    });
+      ));
 
     // Delete all files in the folder
     for (const file of folderFiles) {
@@ -85,6 +91,11 @@ export async function PATCH(
     const { name } = await req.json();
     if (!name || typeof name !== "string") {
       return new NextResponse("Invalid name", { status: 400 });
+    }
+
+    const db = await getDb();
+    if (!db) {
+      return new NextResponse("Database connection failed", { status: 500 });
     }
 
     // Update in database
