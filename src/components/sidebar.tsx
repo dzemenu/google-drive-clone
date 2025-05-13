@@ -1,4 +1,4 @@
-import { Folder, Trash, LogOut, Plus, Upload, Menu } from "lucide-react";
+import { Trash, LogOut, Plus, Upload, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useClerk } from "@clerk/nextjs";
 
