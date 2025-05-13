@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 
 // GET request to list folders
-export async function GET() {
+export async function GET(req: Request) {
   try {
     const { userId } = await auth();
     if (!userId) {
@@ -13,13 +13,19 @@ export async function GET() {
     }
 
     const db = await getDb();
-    const userFolders = await db
+    if (!db) {
+      return NextResponse.json(
+        { error: "Database connection failed" },
+        { status: 500 }
+      );
+    }
+
+    const result = await db
       .select()
       .from(folders)
       .where(eq(folders.userId, userId));
 
-    // Ensure we return an array even if no folders are found
-    return NextResponse.json(userFolders || []);
+    return NextResponse.json(result);
   } catch (error) {
     console.error("Error fetching folders:", error);
     return NextResponse.json(
@@ -40,38 +46,34 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { name } = body;
 
-    // Ensure that the folder name is not empty
-    if (!name || name.trim() === "") {
+    if (!name || typeof name !== "string") {
       return NextResponse.json(
-        { error: "Folder name is required" },
+        { error: "Name is required" },
         { status: 400 }
       );
     }
 
-    console.log("Creating folder with data:", { name, userId });
-
     const db = await getDb();
-    // Insert the new folder into the database
-    const newFolder = await db
-      .insert(folders)
-      .values({ 
-        name: name.trim(),
-        userId: userId
-      })
-      .returning();
-
-    console.log("Created folder:", newFolder);
-
-    if (!newFolder || newFolder.length === 0) {
-      throw new Error("Failed to create folder: No data returned");
+    if (!db) {
+      return NextResponse.json(
+        { error: "Database connection failed" },
+        { status: 500 }
+      );
     }
 
-    // Return the created folder with a 201 status code
-    return NextResponse.json(newFolder[0], { status: 201 });
+    const [folder] = await db
+      .insert(folders)
+      .values({
+        name,
+        userId,
+      } as typeof folders.$inferInsert)
+      .returning();
+
+    return NextResponse.json(folder);
   } catch (error) {
     console.error("Error creating folder:", error);
     return NextResponse.json(
-      { error: "Failed to create folder", details: error instanceof Error ? error.message : "Unknown error" },
+      { error: "Failed to create folder" },
       { status: 500 }
     );
   }
