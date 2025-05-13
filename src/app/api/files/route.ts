@@ -3,135 +3,120 @@ import { getDb } from "@/lib/db";
 import { files } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { auth } from "@clerk/nextjs/server";
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
 
-export async function GET(req: Request) {
+interface FileData {
+  name: string;
+  url: string;
+  size: string;
+  folderId?: number | null;
+  isTrash?: boolean;
+}
+
+export async function GET(req: NextRequest) {
   try {
     const { userId } = await auth();
+    const searchParams = req.nextUrl.searchParams;
+    const folderId = searchParams.get("folderId");
+    const showTrash = searchParams.get("showTrash") === "true";
+
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { searchParams } = new URL(req.url);
-    const folderId = searchParams.get("folderId");
-    const showTrash = searchParams.get("showTrash") === "true";
-
-    console.log("Fetching files with params:", { userId, folderId, showTrash });
-
     const db = await getDb();
-    try {
-      const conditions = [
-        eq(files.userId, userId),
-        eq(files.isTrash, showTrash)
-      ];
+    const conditions = [
+      eq(files.userId, userId),
+      eq(files.isTrash, showTrash)
+    ];
 
-      if (folderId) {
-        conditions.push(eq(files.folderId, parseInt(folderId)));
-      }
-
-      const filesList = await db
-        .select()
-        .from(files)
-        .where(and(...conditions));
-
-      console.log("Files fetched successfully:", filesList.length);
-      return NextResponse.json(filesList);
-    } catch (dbError) {
-      console.error("Database error:", dbError);
-      return NextResponse.json(
-        { error: "Database error", details: dbError instanceof Error ? dbError.message : "Unknown error" },
-        { status: 500 }
-      );
+    if (folderId) {
+      conditions.push(eq(files.folderId, parseInt(folderId)));
     }
+
+    const result = await db
+      .select()
+      .from(files)
+      .where(and(...conditions));
+
+    return NextResponse.json(result);
   } catch (error) {
-    console.error("[FILES_GET]", error);
-    return NextResponse.json(
-      { error: "Internal Error", details: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
-    );
+    console.error("Error fetching files:", error);
+    return NextResponse.json({ error: "Failed to fetch files" }, { status: 500 });
   }
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
     const { userId } = await auth();
+
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const body = await req.json();
-    const { name, url, size, folderId } = body;
-
-    console.log("Received file data:", { name, url, size, folderId, userId });
+    const { name, url, size, folderId } = body as FileData;
 
     if (!name || !url || !size) {
       return NextResponse.json(
-        { error: "Missing required fields", details: { name, url, size } },
+        { error: "Name, URL, and size are required" },
         { status: 400 }
       );
     }
 
     const db = await getDb();
-    try {
-      const [file] = await db
-        .insert(files)
-        .values({
-          name,
-          url,
-          size,
-          folderId: folderId ? parseInt(folderId) : null,
-          userId,
-          isTrash: false,
-        })
-        .returning();
+    const [file] = await db
+      .insert(files)
+      .values({
+        name,
+        url,
+        size,
+        folderId: folderId || null,
+        userId,
+        isTrash: false,
+      } as typeof files.$inferInsert)
+      .returning();
 
-      console.log("File created successfully:", file);
-      return NextResponse.json(file);
-    } catch (dbError) {
-      console.error("Database error:", dbError);
-      return NextResponse.json(
-        { error: "Database error", details: dbError instanceof Error ? dbError.message : "Unknown error" },
-        { status: 500 }
-      );
-    }
+    return NextResponse.json(file);
   } catch (error) {
-    console.error("[FILES_POST]", error);
-    return NextResponse.json(
-      { error: "Internal Error", details: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
-    );
+    console.error("Error creating file:", error);
+    return NextResponse.json({ error: "Failed to create file" }, { status: 500 });
   }
 }
 
-export async function PATCH(req: Request) {
+export async function PATCH(req: NextRequest) {
   try {
     const { userId } = await auth();
+
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const body = await req.json();
-    const { id, name, isTrash } = body;
+    const { id, name, isTrash } = body as FileData & { id: number };
 
     if (!id) {
-      return NextResponse.json({ error: "Missing file ID" }, { status: 400 });
+      return NextResponse.json({ error: "File ID is required" }, { status: 400 });
     }
 
-    const updateData: any = {};
-    if (name) updateData.name = name;
-    if (typeof isTrash === "boolean") updateData.isTrash = isTrash;
-
     const db = await getDb();
-    const [file] = await db
+    const [updatedFile] = await db
       .update(files)
-      .set(updateData)
+      .set({
+        ...(name && { name }),
+        ...(typeof isTrash === "boolean" && { isTrash }),
+      } as Partial<typeof files.$inferInsert>)
       .where(and(eq(files.id, id), eq(files.userId, userId)))
       .returning();
 
-    return NextResponse.json(file);
+    if (!updatedFile) {
+      return NextResponse.json({ error: "File not found" }, { status: 404 });
+    }
+
+    return NextResponse.json(updatedFile);
   } catch (error) {
-    console.error("[FILES_PATCH]", error);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    console.error("Error updating file:", error);
+    return NextResponse.json({ error: "Failed to update file" }, { status: 500 });
   }
 }
 
