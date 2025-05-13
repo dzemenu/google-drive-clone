@@ -7,7 +7,7 @@ import { unlink } from "fs/promises";
 import path from "path";
 
 export async function DELETE(
-  req: Request,
+  _req: Request,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -72,7 +72,7 @@ export async function DELETE(
 }
 
 export async function PATCH(
-  req: Request,
+  _req: Request,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -88,7 +88,7 @@ export async function PATCH(
       return new NextResponse("Invalid folder ID", { status: 400 });
     }
 
-    const { name } = await req.json();
+    const { name } = await _req.json();
     if (!name || typeof name !== "string") {
       return new NextResponse("Invalid name", { status: 400 });
     }
