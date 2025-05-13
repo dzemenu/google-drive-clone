@@ -1,36 +1,86 @@
-import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db"; // Your Drizzle ORM instance
-import { folders } from "@/lib/db/schema"; // Your folders table schema
+import { Webhook } from "svix";
+import { headers } from "next/headers";
+import { WebhookEvent } from "@clerk/nextjs/server";
+import { NextResponse } from "next/server";
+import { getDb } from "@/lib/db";
+import { files, folders } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 
-export async function POST(req: NextRequest) {
-  const secret = req.headers.get("clerk-signature");
-  const expectedSecret = process.env.CLERK_WEBHOOK_SECRET;
+export async function POST(req: Request) {
+  const WEBHOOK_SECRET = process.env.CLERK_WEBHOOK_SECRET;
 
-  if (secret !== expectedSecret) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!WEBHOOK_SECRET) {
+    throw new Error("Please add CLERK_WEBHOOK_SECRET from Clerk Dashboard to .env");
   }
 
-  const body = await req.json();
+  // Get the headers
+  const headerPayload = await headers();
+  const svix_id = headerPayload.get("svix-id");
+  const svix_timestamp = headerPayload.get("svix-timestamp");
+  const svix_signature = headerPayload.get("svix-signature");
 
-  if (body.type === "user.created") {
-    const userId = body.data.id;
-
-    // Define default folders
-    const defaultFolders = ["My Drive", "Shared with me", "Trash"];
-
-    // Insert default folders into the database
-    await db.insert(folders).values(
-      defaultFolders.map((name) => ({
-        name,
-        userId,
-      }))
-    );
-
-    return NextResponse.json(
-      { message: "Default folders created" },
-      { status: 200 }
-    );
+  // If there are no headers, error out
+  if (!svix_id || !svix_timestamp || !svix_signature) {
+    return new Response("Error occurred -- no svix headers", {
+      status: 400,
+    });
   }
 
-  return NextResponse.json({ message: "Event not handled" }, { status: 200 });
+  // Get the body
+  const payload = await req.json();
+  const body = JSON.stringify(payload);
+
+  // Create a new Svix instance with your secret.
+  const wh = new Webhook(WEBHOOK_SECRET);
+
+  let evt: WebhookEvent;
+
+  // Verify the payload with the headers
+  try {
+    evt = wh.verify(body, {
+      "svix-id": svix_id,
+      "svix-timestamp": svix_timestamp,
+      "svix-signature": svix_signature,
+    }) as WebhookEvent;
+  } catch (err) {
+    console.error("Error verifying webhook:", err);
+    return new Response("Error occurred", {
+      status: 400,
+    });
+  }
+
+  // Handle the webhook
+  const eventType = evt.type;
+
+  if (eventType === "user.deleted") {
+    const userId = evt.data.id;
+    if (!userId) {
+      return new Response("User ID is required", {
+        status: 400,
+      });
+    }
+
+    const db = await getDb();
+    if (!db) {
+      console.error("Failed to connect to database");
+      return new Response("Database connection failed", {
+        status: 500,
+      });
+    }
+
+    try {
+      // Delete all files and folders belonging to the user
+      await db.delete(files).where(eq(files.userId, userId));
+      await db.delete(folders).where(eq(folders.userId, userId));
+
+      return NextResponse.json({ message: "User data deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting user data:", error);
+      return new Response("Error deleting user data", {
+        status: 500,
+      });
+    }
+  }
+
+  return NextResponse.json({ message: "Webhook received" });
 }
