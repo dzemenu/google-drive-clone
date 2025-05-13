@@ -1,15 +1,16 @@
-import { LogOut, Plus, Upload, Menu } from "lucide-react";
+import { Folder, Trash, LogOut, Plus, Upload, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useClerk } from "@clerk/nextjs";
 
 interface SidebarProps {
   onAddFolder: () => void;
   onUpload: () => void;
+  onViewTrash: () => void;
   isOpen: boolean;
   onClose: () => void;
 }
 
-export function Sidebar({ onAddFolder, onUpload, isOpen, onClose }: SidebarProps) {
+export function Sidebar({ onAddFolder, onUpload, onViewTrash, isOpen, onClose }: SidebarProps) {
   const { signOut } = useClerk();
 
   return (
@@ -34,6 +35,12 @@ export function Sidebar({ onAddFolder, onUpload, isOpen, onClose }: SidebarProps
             className="flex gap-2 w-full justify-center items-center"
           >
             <Upload size={18} /> Upload File
+          </Button>
+          <Button
+            onClick={onViewTrash}
+            className="flex gap-2 w-full justify-center items-center"
+          >
+            <Trash size={18} /> Trash
           </Button>
           <Button
             variant="destructive"

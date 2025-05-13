@@ -5,6 +5,7 @@ import { Upload, AlertCircle, X } from "lucide-react";
 import { useUploadThing } from "@/lib/uploadthing";
 import { useDropzone } from "react-dropzone";
 import { toast } from "react-hot-toast";
+import { useAuth } from "@clerk/nextjs";
 
 interface Folder {
   id: number;
@@ -15,47 +16,56 @@ interface UploadModalProps {
   isOpen: boolean;
   onClose: () => void;
   folders: Folder[];
+  onUploadComplete?: () => void;
 }
 
-export function UploadModal({ isOpen, onClose, folders }: UploadModalProps) {
+export function UploadModal({ isOpen, onClose, folders, onUploadComplete }: UploadModalProps) {
   const [selectedFolder, setSelectedFolder] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const { getToken } = useAuth();
 
   const { startUpload, isUploading: isUploadThingUploading } = useUploadThing("fileUploader", {
     onClientUploadComplete: async (res) => {
       if (res) {
         const file = res[0];
         try {
+          const token = await getToken();
           // Create file record in database with folder assignment
           const response = await fetch("/api/files", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
+              "Authorization": `Bearer ${token}`,
             },
             body: JSON.stringify({
               name: file.name,
               url: file.url,
-              size: file.size,
+              size: file.size.toString(),
               folderId: selectedFolder,
             }),
           });
 
           if (!response.ok) {
-            throw new Error("Failed to create file record");
+            const errorData = await response.json().catch(() => ({ error: "Failed to create file record" }));
+            throw new Error(errorData.error || "Failed to create file record");
           }
+
+          const data = await response.json();
+          console.log("File created successfully:", data);
 
           toast.success("File uploaded successfully");
           handleClose();
-          // Trigger a page refresh to update the file list
-          window.location.reload();
+          onUploadComplete?.();
         } catch (error) {
+          console.error("Error creating file record:", error);
           setError(error instanceof Error ? error.message : 'Failed to create file record');
           toast.error("Failed to create file record");
         }
       }
     },
     onUploadError: (error: Error) => {
+      console.error("Upload error:", error);
       setError(error.message);
       toast.error(error.message);
     },
@@ -67,8 +77,10 @@ export function UploadModal({ isOpen, onClose, folders }: UploadModalProps) {
         setError(null);
         setIsUploading(true);
         try {
+          console.log("Starting file upload...");
           await startUpload(acceptedFiles);
         } catch (error) {
+          console.error("Error in file upload:", error);
           setError(error instanceof Error ? error.message : 'Failed to upload file');
           toast.error("Failed to upload file");
         } finally {
@@ -80,6 +92,11 @@ export function UploadModal({ isOpen, onClose, folders }: UploadModalProps) {
     accept: {
       'image/*': ['.png', '.jpg', '.jpeg', '.gif', '.webp'],
       'application/pdf': ['.pdf'],
+      'text/*': ['.txt', '.md', '.json', '.csv'],
+      'application/msword': ['.doc'],
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
+      'application/vnd.ms-excel': ['.xls'],
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
     },
   });
 

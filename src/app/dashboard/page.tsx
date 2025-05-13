@@ -11,6 +11,18 @@ import { UploadModal } from "@/components/upload-modal";
 import { ConfirmModal } from "@/components/confirm-modal";
 import { RenameModal } from "@/components/rename-modal";
 import { FilePreview } from "@/components/file-preview";
+import { useAuth } from "@clerk/nextjs";
+
+interface File {
+  id: number;
+  name: string;
+  url: string;
+  size: string;
+  folderId: number | null;
+  userId: string;
+  isTrash: boolean;
+  createdAt: string;
+}
 
 interface Folder {
   id: number;
@@ -19,113 +31,226 @@ interface Folder {
   createdAt: string;
 }
 
-interface FileItem {
-  id: number;
-  name: string;
-  url: string;
-  size: string;
-  folderId: number | null;
-  userId: string;
-  createdAt: string;
-}
-
 export default function Dashboard() {
-  const [folders, setFolders] = useState<Folder[]>([]);
-  const [files, setFiles] = useState<FileItem[]>([]);
-  const [newFolderName, setNewFolderName] = useState("");
   const [darkMode, setDarkMode] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isAddFolderModalOpen, setIsAddFolderModalOpen] = useState(false);
-  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [files, setFiles] = useState<File[]>([]);
+  const [folders, setFolders] = useState<Folder[]>([]);
   const [expandedFolders, setExpandedFolders] = useState<Set<number>>(new Set());
-  const [isDeleteFileModalOpen, setIsDeleteFileModalOpen] = useState(false);
-  const [isDeleteFolderModalOpen, setIsDeleteFolderModalOpen] = useState(false);
-  const [fileToDelete, setFileToDelete] = useState<FileItem | null>(null);
-  const [folderToDelete, setFolderToDelete] = useState<Folder | null>(null);
-  const [isRenameFileModalOpen, setIsRenameFileModalOpen] = useState(false);
-  const [isRenameFolderModalOpen, setIsRenameFolderModalOpen] = useState(false);
-  const [fileToRename, setFileToRename] = useState<FileItem | null>(null);
-  const [folderToRename, setFolderToRename] = useState<Folder | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<FileItem | null>(null);
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [isAddFolderModalOpen, setIsAddFolderModalOpen] = useState(false);
+  const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFolder, setSelectedFolder] = useState<Folder | null>(null);
+  const [isTrashView, setIsTrashView] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
+  const [newFileName, setNewFileName] = useState("");
+  const { getToken } = useAuth();
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", darkMode);
   }, [darkMode]);
 
-  const fetchFolders = async () => {
-    try {
-      setIsLoading(true);
-      const res = await fetch("/api/folders");
-      if (!res.ok) {
-        throw new Error("Failed to fetch folders");
-      }
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        setFolders(data);
-      } else {
-        console.error("Invalid folders data format:", data);
-        setFolders([]);
-      }
-    } catch (error) {
-      console.error("Error fetching folders:", error);
-      setFolders([]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  useEffect(() => {
+    fetchFiles();
+    fetchFolders();
+  }, [isTrashView]);
 
   const fetchFiles = async () => {
     try {
-      const res = await fetch("/api/files");
-      if (!res.ok) {
-        throw new Error("Failed to fetch files");
+      const token = await getToken();
+      const response = await fetch(`/api/files?showTrash=${isTrashView}`, {
+        headers: {
+          "Authorization": `Bearer ${token}`,
+        },
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Failed to fetch files" }));
+        throw new Error(errorData.error || "Failed to fetch files");
       }
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        setFiles(data);
-      } else {
-        console.error("Invalid files data format:", data);
-        setFiles([]);
-      }
+      
+      const data = await response.json();
+      setFiles(data);
     } catch (error) {
       console.error("Error fetching files:", error);
-      setFiles([]);
+      toast.error(error instanceof Error ? error.message : "Failed to fetch files");
     }
   };
 
-  useEffect(() => {
-    fetchFolders();
-    fetchFiles();
-  }, []);
+  const fetchFolders = async () => {
+    try {
+      const token = await getToken();
+      const response = await fetch("/api/folders", {
+        headers: {
+          "Authorization": `Bearer ${token}`,
+        },
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Failed to fetch folders" }));
+        throw new Error(errorData.error || "Failed to fetch folders");
+      }
+      
+      const data = await response.json();
+      setFolders(data);
+    } catch (error) {
+      console.error("Error fetching folders:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to fetch folders");
+    }
+  };
 
   const handleAddFolder = async () => {
-    if (!newFolderName.trim()) return;
+    if (!newFolderName.trim()) {
+      toast.error("Please enter a folder name");
+      return;
+    }
+
     try {
       const response = await fetch("/api/folders", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: newFolderName }),
       });
 
-      if (!response.ok) {
-        const error = await response.json();
-        console.error("Failed to create folder:", error);
-        return;
-      }
-
-      setNewFolderName("");
-      setIsAddFolderModalOpen(false);
+      if (!response.ok) throw new Error("Failed to create folder");
       await fetchFolders();
+      setIsAddFolderModalOpen(false);
+      setNewFolderName("");
+      toast.success("Folder created successfully");
     } catch (error) {
       console.error("Error creating folder:", error);
+      toast.error("Failed to create folder");
     }
   };
 
-  const toggleFolder = (folderId: number) => {
-    setExpandedFolders(prev => {
+  const handleRename = async () => {
+    if (!newFileName.trim()) {
+      toast.error("Please enter a new name");
+      return;
+    }
+
+    try {
+      if (selectedFile) {
+        const response = await fetch(`/api/files`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: selectedFile.id, name: newFileName }),
+        });
+
+        if (!response.ok) throw new Error("Failed to rename file");
+        await fetchFiles();
+      } else if (selectedFolder) {
+        const response = await fetch(`/api/folders/${selectedFolder.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: newFileName }),
+        });
+
+        if (!response.ok) throw new Error("Failed to rename folder");
+        await fetchFolders();
+      }
+
+      setIsRenameModalOpen(false);
+      setNewFileName("");
+      setSelectedFile(null);
+      setSelectedFolder(null);
+      toast.success("Renamed successfully");
+    } catch (error) {
+      console.error("Error renaming:", error);
+      toast.error("Failed to rename");
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      if (selectedFile) {
+        const token = await getToken();
+        const response = await fetch(`/api/files?id=${selectedFile.id}`, {
+          method: "DELETE",
+          headers: {
+            "Authorization": `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) throw new Error("Failed to delete file");
+        await fetchFiles();
+        await fetchFolders();
+      } else if (selectedFolder) {
+        const token = await getToken();
+        const response = await fetch(`/api/folders/${selectedFolder.id}`, {
+          method: "DELETE",
+          headers: {
+            "Authorization": `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) throw new Error("Failed to delete folder");
+        await fetchFolders();
+        await fetchFiles();
+      }
+
+      setIsDeleteModalOpen(false);
+      setSelectedFile(null);
+      setSelectedFolder(null);
+      toast.success("Deleted successfully");
+    } catch (error) {
+      console.error("Error deleting:", error);
+      toast.error("Failed to delete");
+    }
+  };
+
+  const handleRestore = async (file: File) => {
+    try {
+      const token = await getToken();
+      const response = await fetch(`/api/files`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({ id: file.id, isTrash: false }),
+      });
+
+      if (!response.ok) throw new Error("Failed to restore file");
+      await fetchFiles();
+      await fetchFolders();
+      toast.success("File restored successfully");
+    } catch (error) {
+      console.error("Error restoring file:", error);
+      toast.error("Failed to restore file");
+    }
+  };
+
+  const handlePermanentDelete = async (file: File) => {
+    try {
+      const token = await getToken();
+      const response = await fetch(`/api/files?id=${file.id}`, {
+        method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) throw new Error("Failed to delete file permanently");
+      await fetchFiles();
+      await fetchFolders();
+      toast.success("File deleted permanently");
+    } catch (error) {
+      console.error("Error deleting file:", error);
+      toast.error("Failed to delete file");
+    }
+  };
+
+  const handleFileClick = (file: File) => {
+    setSelectedFile(file);
+    setIsPreviewModalOpen(true);
+  };
+
+  const handleToggleFolder = (folderId: number) => {
+    setExpandedFolders((prev) => {
       const next = new Set(prev);
       if (next.has(folderId)) {
         next.delete(folderId);
@@ -136,251 +261,129 @@ export default function Dashboard() {
     });
   };
 
-  const handleDeleteFile = async (file: FileItem) => {
-    try {
-      const response = await fetch(`/api/files/${file.id}`, {
-        method: "DELETE",
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to delete file");
-      }
-
-      setFiles((prev) => prev.filter((f) => f.id !== file.id));
-    } catch (error) {
-      console.error("Error deleting file:", error);
-      toast.error("Failed to delete file");
-    }
-  };
-
-  const handleDeleteFolder = async (folder: Folder) => {
-    try {
-      const response = await fetch(`/api/folders/${folder.id}`, {
-        method: "DELETE",
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to delete folder");
-      }
-
-      setFolders((prev) => prev.filter((f) => f.id !== folder.id));
-      setFiles((prev) => prev.filter((f) => f.folderId !== folder.id));
-    } catch (error) {
-      console.error("Error deleting folder:", error);
-      toast.error("Failed to delete folder");
-    }
-  };
-
-  const handleRenameFile = async (newName: string) => {
-    if (!fileToRename) return;
-
-    try {
-      const response = await fetch(`/api/files/${fileToRename.id}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ name: newName }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to rename file");
-      }
-
-      const updatedFile = await response.json();
-      setFiles((prev) =>
-        prev.map((file) =>
-          file.id === updatedFile.id ? updatedFile : file
-        )
-      );
-      toast.success("File renamed successfully");
-      setIsRenameFileModalOpen(false);
-      setFileToRename(null);
-    } catch (error) {
-      console.error("Error renaming file:", error);
-      toast.error("Failed to rename file");
-    }
-  };
-
-  const handleRenameFolder = async (newName: string) => {
-    if (!folderToRename) return;
-
-    try {
-      const response = await fetch(`/api/folders/${folderToRename.id}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ name: newName }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to rename folder");
-      }
-
-      const updatedFolder = await response.json();
-      setFolders((prev) =>
-        prev.map((folder) =>
-          folder.id === updatedFolder.id ? updatedFolder : folder
-        )
-      );
-      toast.success("Folder renamed successfully");
-      setIsRenameFolderModalOpen(false);
-      setFolderToRename(null);
-    } catch (error) {
-      console.error("Error renaming folder:", error);
-      toast.error("Failed to rename folder");
-    }
-  };
-
   return (
-    <div className="flex min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
-      <Sidebar
-        isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)}
-        onAddFolder={() => setIsAddFolderModalOpen(true)}
-        onUpload={() => setIsUploadModalOpen(true)}
-      />
-
-      <main className="flex-1 p-4 md:p-6 mt-16 md:mt-0">
-        <Header
-          darkMode={darkMode}
-          onToggleDarkMode={() => setDarkMode(!darkMode)}
+    <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
+      <div className="flex">
+        <Sidebar
+          onAddFolder={() => setIsAddFolderModalOpen(true)}
+          onUpload={() => setIsUploadModalOpen(true)}
+          onViewTrash={() => setIsTrashView(!isTrashView)}
+          isOpen={isSidebarOpen}
+          onClose={() => setIsSidebarOpen(false)}
         />
-
-        <div className="rounded-lg shadow-sm bg-white dark:bg-gray-800 p-4">
-          {isLoading ? (
-            <p className="text-gray-500 dark:text-gray-400">Loading...</p>
-          ) : (
+        <main className="flex-1 p-8">
+          <Header
+            darkMode={darkMode}
+            onToggleDarkMode={() => setDarkMode(!darkMode)}
+          />
+          <div className="mt-8">
             <FileList
               files={files}
               folders={folders}
               expandedFolders={expandedFolders}
-              onToggleFolder={toggleFolder}
+              onToggleFolder={handleToggleFolder}
               onRenameFile={(file) => {
-                setFileToRename(file);
-                setIsRenameFileModalOpen(true);
+                setSelectedFile(file);
+                setNewFileName(file.name);
+                setIsRenameModalOpen(true);
               }}
               onDeleteFile={(file) => {
-                setFileToDelete(file);
-                setIsDeleteFileModalOpen(true);
+                setSelectedFile(file);
+                setIsDeleteModalOpen(true);
               }}
               onRenameFolder={(folder) => {
-                setFolderToRename(folder);
-                setIsRenameFolderModalOpen(true);
+                setSelectedFolder(folder);
+                setNewFileName(folder.name);
+                setIsRenameModalOpen(true);
               }}
               onDeleteFolder={(folder) => {
-                setFolderToDelete(folder);
-                setIsDeleteFolderModalOpen(true);
+                setSelectedFolder(folder);
+                setIsDeleteModalOpen(true);
               }}
-              onFileClick={setSelectedFile}
+              onFileClick={handleFileClick}
+              isTrashView={isTrashView}
+              onRestore={handleRestore}
+              onPermanentDelete={handlePermanentDelete}
+              onBackToHome={() => setIsTrashView(false)}
             />
-          )}
-        </div>
-      </main>
+          </div>
+        </main>
+      </div>
 
       {/* Add Folder Modal */}
       <Modal
         isOpen={isAddFolderModalOpen}
         onClose={() => setIsAddFolderModalOpen(false)}
-        title="Create New Folder"
+        title="Add New Folder"
       >
-        <div className="mt-2">
+        <div className="space-y-4">
           <input
             type="text"
             value={newFolderName}
             onChange={(e) => setNewFolderName(e.target.value)}
             placeholder="Enter folder name"
-            className="w-full rounded border p-2 text-sm bg-gray-50 dark:bg-gray-700"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                handleAddFolder();
-              }
-            }}
+            className="w-full p-2 border rounded"
           />
-        </div>
-
-        <div className="mt-4 flex justify-end gap-2">
-          <Button
-            variant="outline"
-            onClick={() => setIsAddFolderModalOpen(false)}
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleAddFolder}
-            disabled={!newFolderName.trim()}
-          >
-            Create Folder
-          </Button>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setIsAddFolderModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleAddFolder}>Create</Button>
+          </div>
         </div>
       </Modal>
+
+      {/* Rename Modal */}
+      <RenameModal
+        isOpen={isRenameModalOpen}
+        onClose={() => {
+          setIsRenameModalOpen(false);
+          setNewFileName("");
+          setSelectedFile(null);
+          setSelectedFolder(null);
+        }}
+        currentName={selectedFile?.name || selectedFolder?.name || ""}
+        onRename={handleRename}
+        type={selectedFile ? "file" : "folder"}
+      />
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => {
+          setIsDeleteModalOpen(false);
+          setSelectedFile(null);
+          setSelectedFolder(null);
+        }}
+        onConfirm={handleDelete}
+        title="Delete Confirmation"
+        description={`Are you sure you want to delete this ${
+          selectedFile ? "file" : "folder"
+        }?`}
+      />
+
+      {/* File Preview Modal */}
+      {selectedFile && (
+        <FilePreview
+          isOpen={isPreviewModalOpen}
+          onClose={() => {
+            setIsPreviewModalOpen(false);
+            setSelectedFile(null);
+          }}
+          file={selectedFile}
+        />
+      )}
 
       {/* Upload Modal */}
       <UploadModal
         isOpen={isUploadModalOpen}
         onClose={() => setIsUploadModalOpen(false)}
         folders={folders}
+        onUploadComplete={fetchFiles}
       />
-
-      {/* Delete File Modal */}
-      <ConfirmModal
-        isOpen={isDeleteFileModalOpen}
-        onClose={() => {
-          setIsDeleteFileModalOpen(false);
-          setFileToDelete(null);
-        }}
-        onConfirm={() => fileToDelete && handleDeleteFile(fileToDelete)}
-        title="Delete File"
-        description="Are you sure you want to delete this file? This action cannot be undone."
-      />
-
-      {/* Delete Folder Modal */}
-      <ConfirmModal
-        isOpen={isDeleteFolderModalOpen}
-        onClose={() => {
-          setIsDeleteFolderModalOpen(false);
-          setFolderToDelete(null);
-        }}
-        onConfirm={() => folderToDelete && handleDeleteFolder(folderToDelete)}
-        title="Delete Folder"
-        description="Are you sure you want to delete this folder and all its contents? This action cannot be undone."
-      />
-
-      {/* Rename File Modal */}
-      <RenameModal
-        isOpen={isRenameFileModalOpen}
-        onClose={() => {
-          setIsRenameFileModalOpen(false);
-          setFileToRename(null);
-        }}
-        onRename={handleRenameFile}
-        title="Rename File"
-        currentName={fileToRename?.name || ""}
-        type="file"
-      />
-
-      {/* Rename Folder Modal */}
-      <RenameModal
-        isOpen={isRenameFolderModalOpen}
-        onClose={() => {
-          setIsRenameFolderModalOpen(false);
-          setFolderToRename(null);
-        }}
-        onRename={handleRenameFolder}
-        title="Rename Folder"
-        currentName={folderToRename?.name || ""}
-        type="folder"
-      />
-
-      {/* File Preview Modal */}
-      <Modal
-        isOpen={!!selectedFile}
-        onClose={() => setSelectedFile(null)}
-        title={selectedFile?.name || ""}
-      >
-        {selectedFile && <FilePreview file={selectedFile} />}
-      </Modal>
     </div>
   );
 }
